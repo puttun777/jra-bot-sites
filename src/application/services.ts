@@ -297,7 +297,13 @@ export async function runAnalysis(s: Services, opt: AnalysisOptions): Promise<An
       await s.runs.finish(TENANT_ID, runId, "SUCCEEDED", "DENY_RUN", null, s.clock.now());
       return { runId, date, state: "NOTHING_TO_DO", races: [], message: "手動補正（実行を禁止）により実行しませんでした。" };
     }
-    for (const race of targets) results.push(await analyzeRace(s, runId, race.raceId, race.postAt, race.inWindow || opt.raceId !== undefined, now, opt.config ?? RECOMMENDED_DECISION_CONFIG));
+    // 過去日の再判定（BACKFILL）: 旧データには開催日（race_day）の確認が無いので、発走時刻が分かるレースを対象にする。
+    // 使うオッズは発走前に観測したものだけ（analyzeRace の cutoff）なので、未来の情報は混ざらない
+    const backfill = opt.trigger === "BACKFILL" && date < jstDate(now);
+    for (const race of targets) {
+      const eligible = race.inWindow || opt.raceId !== undefined || (backfill && race.postAt !== null);
+      results.push(await analyzeRace(s, runId, race.raceId, race.postAt, eligible, now, opt.config ?? RECOMMENDED_DECISION_CONFIG));
+    }
     const failed = results.filter((r) => r.status === "ERROR").length;
     await s.runs.finish(TENANT_ID, runId, failed > 0 ? "FAILED" : "SUCCEEDED", failed > 0 ? `RACE_ERRORS:${failed}` : null, JSON.stringify({ analyzed: results.filter((r) => r.status === "ANALYZED").length }), s.clock.now());
     const analyzed = results.filter((r) => r.status === "ANALYZED").length;

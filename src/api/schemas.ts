@@ -36,7 +36,8 @@ export const CreateAgentRequest = z
   })
   .strict();
 
-export const RunAnalysisRequest = z.object({ date: isoDate.optional(), raceId: raceIdSchema.optional() }).strict();
+/** backfill: 過去日の再判定（開催日の確認が無い旧データも、発走時刻が分かるレースを発走前のオッズで判定する）。 */
+export const RunAnalysisRequest = z.object({ date: isoDate.optional(), raceId: raceIdSchema.optional(), backfill: z.boolean().optional() }).strict();
 export const SetModeRequest = z.object({ mode: z.enum(["NORMAL", "STOPPED"]), reason: z.string().trim().min(1).max(500).refine(noControl) }).strict();
 
 /** 取込の封筒（正規化 JSON レコードの束）。 */

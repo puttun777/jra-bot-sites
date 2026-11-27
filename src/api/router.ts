@@ -204,7 +204,7 @@ export async function handleRequest(req: Request, ctx: AppContext): Promise<Resp
       }
       case "POST /api/v1/admin/analysis/run": {
         const b = await body(req, RunAnalysisRequest);
-        const r = await runAnalysis(s, { ...b, trigger: "MANUAL", actor: p.id });
+        const r = await runAnalysis(s, { ...(b.date === undefined ? {} : { date: b.date }), ...(b.raceId === undefined ? {} : { raceId: b.raceId }), trigger: b.backfill === true ? "BACKFILL" : "MANUAL", actor: p.id });
         return json(r, r.state === "ALREADY_RUNNING" ? 409 : 200);
       }
       case "POST /api/v1/admin/ingest": {
