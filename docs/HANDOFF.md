@@ -9,12 +9,13 @@ jra-bot（中央競馬のオッズから期待値の正の買い目を見つけ�
 ## 2. 実装済み
 - 判定ロジック（単勝・ワイド・三連複、確率、Kelly、見送り、急落フィルタ、hit_rate/edge、総投資上限）: 旧 Python とゴールデンで一致
 - 開催カレンダー（版・状態遷移・履歴・鮮度・手動補正）、取込（正規化 JSON・保留→再適用・隔離・冪等）、判定の実行（リース・停止モード・未来情報の不使用）、紙上成績
-- `/api/v1/*`（jra-bot-web と同じ DTO）+ 管理操作 + MCP ツール 13 個 + 画面（概要・シグナル・成績・運用、レース詳細・取得状況・手動実行・JSON 取込）
+- `/api/v1/*`（jra-bot-web と同じ DTO）+ 管理操作 + MCP ツール 14 個 + 画面（概要・シグナル・成績・運用、レース詳細・取得状況・手動実行・JSON 取込）
 - ローカル開発サーバ・CLI（マイグレーション・合成データ・取込・CSV・判定・バックアップ・復元・エクスポート）・試験 109 件・CI
 
 ## 3. 既存機能との差分（要点。全体は FEATURE_MATRIX）
 - 廃止: JV-Link 取得・Windows エージェント・AWS/GCP の基盤・常駐の監視ループ（30 秒間隔の発走直前監視は再現しない）
-- 保留: 公開 Web の自動取得（規約未確認）・Discord 送信（外部通信未確認）・ML 推論/学習（学習データ無し）・バックテスト・旧の決済表・データ保持の削除
+- 追加（2026-11-27）: JRA 公式サイトからの取得（開催日・出馬表・着順・払戻。オッズは未対応）、旧 SQLite の移行、過去日の再判定（バックテスト）、データ保持
+- 保留: オッズの直接取得・Discord 送信（外部通信未確認）・ML 推論/学習・旧の決済表
 - 変更: 予定の鮮度 18 時間（D-S07）、シグナルはサイト内表示 = 通知済み（D-S09）
 
 ## 4. 技術・ビルド・ローカル起動
@@ -55,8 +56,8 @@ Sites が受け付ける構成を先に最小構成で確認する（SITES_CONST
 ## 9. MCP の登録（E-4）
 - サーバ: `POST https://<site>/mcp`（JSON-RPC 2.0。`initialize`・`tools/list`・`tools/call`。SSE・セッションは使わない）
 - 認証: `Authorization: Bearer <INGEST_TOKEN または発行したトークン>`。Sites のプラグイン方式で別の認証が必要なら、`src/api/router.ts` の `/mcp` の認証部分だけを差し替える。
-- ツール: get_sync_status / get_fetch_plan / list_races / get_race / upsert_race_days / upsert_races / upsert_odds / upsert_results / run_analysis / get_analysis_results / get_performance / list_failed_records / retry_pending
-- 確認: `tools/list` が 13 個、`get_sync_status` が応答する。
+- ツール: get_sync_status / get_fetch_plan / list_races / get_race / upsert_race_days / upsert_races / upsert_odds / upsert_results / fetch_jra / run_analysis / get_analysis_results / get_performance / list_failed_records / retry_pending
+- 確認: `tools/list` が 14 個、`get_sync_status` が応答する。
 
 ## 10. Automations の登録（E-5）
 OPERATIONS §4 の依頼文 A〜D を、§1 のタイミングで登録する。最初は手動で 1 回ずつ実行して動作を確かめてから定期化する。
@@ -64,7 +65,7 @@ OPERATIONS §4 の依頼文 A〜D を、§1 のタイミングで登録する。
 ## 11. 非公開サイトとしての公開
 「保存（レビュー可能な版）→ 公開」。対象者は限定（§8）。公開後に §6〜§9 の確認を本番の URL で再実施。
 
-## 12. 本人の判断が必要なこと
+## 12. 本人の判断（2026-11-27 に U-1〜U-4 すべて「問題なし」と回答済み）
 | ID | 事項 |
 |---|---|
 | U-1 | 公開 Web（JRA 公式など）からの取得の可否（利用規約・robots の確認）。ChatGPT による取得も同じ |
@@ -80,7 +81,16 @@ OPERATIONS §4 の依頼文 A〜D を、§1 のタイミングで登録する。
 - 発走直前の高頻度監視は無い（取得は 1 日数回）。オッズが無いレースは分析不能。
 
 ## 15. 残タスク（Claude Code 側でも続けられるもの）
-- ML 推論の移植（G1・G2 のゴールデンから）・学習はローカル実行でモデルを取込む方式の設計
+- JRA のオッズの取得（発売中のページの構造を確認してから）
+- ML 推論の移植（G1・G2 のゴールデンから）・学習（旧データの移行で学習データを用意できる）
 - Discord 送信（E-3 が可のとき。G8-SINGLE/GROUPED の本文の移植）
-- データ保持（古いオッズの削除）・バックテスト・旧の決済表（GD11）
-- 公開 Web のアダプター（U-1 が可のとき）
+- 旧の決済表（GD11）
+
+## 16. 旧データの移行の手順（本人の PC。旧 SQLite は Git に入れない）
+```bash
+node dist/src/local/cli.js legacy-export <旧 jraev.sqlite> data/legacy.json      # 変換（件数と除外の理由を表示）
+INGEST_TOKEN=<トークン> node dist/src/local/cli.js push data/legacy.json --url https://<site>   # サイトへ送信（再実行しても二重に入らない）
+node dist/src/local/cli.js legacy-import <旧 jraev.sqlite>                        # ローカル DB へ取込む場合
+node dist/src/local/cli.js backtest --from 2025-01-01 --to 2025-12-31            # ローカルで再判定と紙上成績（DB のコピーで実行を推奨）
+```
+送信量の目安: 1 封筒 200 レコード。D1 の容量（DATABASE §5）を見て、期間（`--from`/`--to`）を区切って送る。

@@ -19,7 +19,7 @@
 | 8 | 取込: 正規化 JSON パーサ（NYS/NRA/NTC/NOW/NOD/NOS/NRS/NHR） | B | web `ingest/agent/NormalizedJsonRecordParser.kt` → `src/domain/ingest.ts` | web では合成検証専用（本番無効）だったものを、**Sites 版の唯一の取込形式として有効化** | 単体・統合 |
 | 9 | 取込: 観測の適用・取込境界の検査・保留→再適用・隔離・冪等（ObservationApplier / BatchIngestor / PendingReplayer） | C | → `ingest.ts`・`services.ts` | 規則は同じ。ワイド・三連複の保存は既定で有効（判定に実オッズが要る: D-S06） | 統合 |
 | 10 | JV-Link 取得・固定長パーサ・Windows エージェント（F01・F02・F21・F22・F23） | **E**（廃止） | — | JV-Link・JRA-VAN を使わない（依頼の必須制約） | — |
-| 11 | 公開 Web からの自動取得 | **E**（保留） | `src/integrations/`（アダプターの置き場） | 利用規約・robots の確認ができていない（DATA_SOURCES §1）。本人判断待ち | — |
+| 11 | 公開 Web からの自動取得（JRA 公式） | D | 新規 `src/integrations/jra/`・`src/application/jraFetch.ts` | 本人の承認（U-1）。開催日・出馬表・着順・払戻を実装。**オッズは未対応**（ページ構造を未確認） | 単体（自作 HTML）・実ページで取得を確認 |
 | 12 | ChatGPT からの取込（MCP ツール） | D | 新規 `src/api/mcp.ts` | 取得は ChatGPT（Automations / 手動）が行い、サイトは検査して保存 | API・MCP 試験。Sites 未検証 E-4 |
 | 13 | CSV/JSON の手動取込 | D | 新規 `src/integrations/csvImport.ts`・画面の JSON 取込・CLI | 第 3 優先の取得方式 | 単体・API |
 | 14 | 判定の実行（bot-run・RaceEvaluator）・実行履歴・リース・重複実行防止・停止モード（F14） | C | web `domain/botrun/*`・infra `ops/src/state.ts`（モード）→ `services.ts runAnalysis` | 常駐ループを廃し、1 リクエストの有限ジョブ（日付・レース単位で分割可能） | 統合 |
@@ -34,10 +34,10 @@
 | 23 | 認証（IAP/OIDC・Cognito）・認可（VIEWER/ADMIN）・CSRF | D + C | web `ApiAuthFilter.kt` → `src/api/auth.ts` | 身元は Sites が注入するヘッダ（未検証 E-1）。役割は app_user 表 / 環境変数 | API |
 | 24 | Discord 通知（F13） | **E**（保留）/ C（補助） | `discord.py` の分割・429 待機・重複除去 → `src/domain/notify.ts` | 外部通信の可否が未確認（E-3）。通知はサイト内表示（signals）で代替。整形・分割は移植済み | G8 の 3 件 |
 | 25 | ML 推論（F10）・学習（F11・F12） | **E**（保留） | web `ml/*`・`ml-train` | 学習に使える実データが無い（JV-Link を使わない）。推論は `modelProbabilities` の差込口だけ用意。学習済み・検証済みとして扱わない | G1〜G7 は未対応 |
-| 26 | バックテスト（BacktestRunner.kt） | **E**（保留） | — | 発走前オッズの時系列が蓄積されてから。成績集計（#17）で代替 | — |
-| 27 | データ保持（retention）・バックアップ | D | web `retention` → ローカル CLI（VACUUM INTO・JSON エクスポート）・画面の期間エクスポート API | D1 のバックアップ機能は未確認 | CLI・API |
+| 26 | バックテスト（BacktestRunner.kt） | D | `runAnalysis`（trigger BACKFILL）・CLI `backtest` | 過去日を発走前のオッズだけで再判定して紙上成績を出す（web の BacktestRunner とは別実装） | 統合（旧データの再判定） |
+| 27 | データ保持（retention）・バックアップ | C + D | web `Retention.kt` → `src/application/retention.ts`（管理 API。既定はドライラン）、バックアップは CLI（VACUUM INTO・JSON）・期間エクスポート API | D1 のバックアップ機能は未確認 | 統合 |
 | 28 | Terraform / Pulumi / EC2 / Cloud Run / Docker 本番 / IAM / WIF | **E**（廃止） | — | AWS/GCP/Azure を使わない | — |
-| 29 | 旧データの移行（legacy-import） | **E**（保留） | web `:legacy-import` | 旧 SQLite は JV-Link 由来の実データ。規約の確認（COMP-4）前はクラウドへ入れない | — |
+| 29 | 旧データの移行（legacy-import） | C | web `legacy-import`（Transform/Convert の規則）→ `src/local/legacy.ts`・CLI `legacy-export`/`legacy-import`/`push` | 本人の承認（U-4）。races・オッズ・組オッズ・着順・払戻を正規化 JSON にして取込。signals・bets・evaluations・馬の情報は移さない | 統合（合成の旧スキーマ DB） |
 
 ## 2. DB
 

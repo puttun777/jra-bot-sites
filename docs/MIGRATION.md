@@ -22,7 +22,7 @@
 | `src/infrastructure/repositories.ts` | web `persistence/dao/*`（Doma SQL） | C | MySQL → SQLite/D1。楽観ロック + 履歴は batch（D-S04） |
 | `src/api/router.ts` | web `dashboard/api/{ReadApi,AdminApi,MeController,MlModelApi,AgentAdminApi}.kt` | C | 同じパス・DTO。Sites 用の管理操作を追加 |
 | `src/api/auth.ts` | web `dashboard/api/ApiAuthFilter.kt`・CSRF フィルタ・`domain/ingest/AgentAuth.kt` | D/C | 身元は Sites のヘッダ（E-1）、機械はベアラー（HMAC 署名は廃止: D-S08） |
-| `src/api/mcp.ts` | 新規 | D | MCP ツール 13 個 |
+| `src/api/mcp.ts` | 新規 | D | MCP ツール 14 個 |
 | `migrations/0001〜0002` | web `db-migration/.../V1〜V5` | B | 型の変換だけ（DATABASE.md §2） |
 | `migrations/0003_sites.sql` | infra `OPERATIONS_DESIGN`（モード） | D | ops_mode・初期テナント |
 | `.github/workflows/ci.yml` | web `.github/workflows/ci.yml`（action の SHA・concurrency） | B | 1 ジョブに縮小 |
@@ -47,8 +47,16 @@ jra-bot-web・jra-bot-infra には LICENSE ファイルが無い（同じ作者�
 | D-S11 | 取込の重複判定のハッシュに観測時刻を含める | 同じ値のオッズでも時刻が違えば別の観測（試験で発見した不具合の修正） |
 | D-S12 | 公開 Web（JRA 等）の自動取得は実装しない | 利用規約・robots を確認できていない（DATA_SOURCES §1）。本人判断 |
 | D-S13 | 予定の段階の取込（NRA の kubun）は web と同じ 1/2/9/0 だけ | 結果系の区分（3〜7）は web でも予定に反映しない |
+| D-S14 | JRA 公式サイトから開催日・出馬表・着順・払戻を取得する（オッズは未対応） | 本人の承認（U-1）。robots.txt 全許可・私的利用。オッズは発売中のページ構造を確認するまで実装しない |
+| D-S15 | 旧データは正規化 JSON に変換して通常の取込を通す（DB へ直接書かない） | 検査・冪等・保留を同じにする。batchId は内容から決めるので再実行しても二重に入らない |
+| D-S16 | 過去日の再判定（BACKFILL）は、開催日の確認が無くても発走時刻が分かるレースを対象にする | 旧データには race_day が無い。オッズは発走前の観測だけなので未来情報は入らない |
+| D-S17 | データ保持は web と同じ既定（組オッズ 14 日など）・既定はドライラン | 組オッズを消すとその期間のワイド・三連複は再判定できない（運用で日数を選ぶ） |
 
 ## 3. 持ち込まなかったもの（理由）
+
+（2026-11-27 追記）旧データの移行で移さないもの: signals・bets・race_evaluations（旧の判定。Sites で同じオッズから再判定できる: D-S16）、
+horses・race_horses・horse_past_runs（ML の特徴量。ML の移植まで保留）、results.payout（単位の疑義: web JVLINK_DESIGN §1.4）。
+
 
 JV-Link・Windows エージェント（`agent/cs`）・取得の fetch/backfill 表・HMAC 署名・Terraform/Pulumi・Docker 本番・AWS/GCP の運用 CLI（`ops/src/aws`・`gcp`）・MySQL の権限（R__grants）・Spring Boot の設定。
 いずれも依頼の必須制約（AWS/GCP/JV-Link を使わない）か、Sites に該当する機能が無いため。
