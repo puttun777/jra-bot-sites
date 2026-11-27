@@ -1,6 +1,14 @@
 # PROGRESS
 
-最終更新: 2026-11-27 / ブランチ: `claude/jra-bot-sites-migration-2pk888` / 担当: Claude Code
+最終更新: 2026-11-27 / ブランチ: `codex/sites-hosting` / 担当: Codex
+
+## Sites 向けの接続と検証（2026-11-27）
+
+- PR #2 マージ後の `main`（`222c7c3`）を使用。`npm run build:sites` で `dist/server/index.js` を生成する。Worker が HTML・CSS・JS を配信し、`DB` に D1 を割り当てる。Sites のプロジェクト ID はホスティング側のソースに設定する。
+- Sites の利用者 ID とメールを確認して既存の権限判定に渡す。所有者の MCP 呼び出しは同じルーターで処理する。`OWNER_EMAILS`・`VIEWER_EMAILS`・`INGEST_TOKEN` は Sites 側の設定を使う。
+- D1 では `GLOB` パターンが 50 バイトを超えると、制約評価時に `D1_ERROR: LIKE or GLOB pattern too complex: SQLITE_ERROR` が発生した。対象は `ck_bot_run_run_id`・`ck_races_race_id_form`・`ck_race_schedule_race_id_form`。Sites 向け成果物で同じパターンを短い述語に分割し、元の SQL とテーブル構成を維持した。
+- `npm run check` は 121 件成功。ローカルの Workers/D1 でマイグレーション 3 件・外部キー・CHECK、`/healthz`・画面資材・管理者と閲覧者のアクセス・手動判定・MCP 14 ツールと `get_sync_status` を確認。合成データの開催日・出馬表・オッズを登録し、`observedAt` の保持と判定も確認した。ブラウザのローカルプレビューで「運用」タブから対象レースがないときのメッセージを確認した。
+- 所有者限定の Sites 下書きを作成済み。Hosted D1、Sites のサインインと認証ゲート、公開後の MCP 接続と Automations は未検証。Sites のホスティングは 2027-01-31 まで無料で、2027-02-01 から Plus の共有枠（125 クレジット/月）を超える使用に課金予定。超過時の自動停止は確認できていない。
 
 ## 現在の状態
 PR #1 は main にマージ済み（`1ac2aae`）。2026-11-27、本人が U-1〜U-4 をすべて承認 → 追加の実装を同じブランチで継続中（PR #2）:
