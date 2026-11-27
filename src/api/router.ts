@@ -23,7 +23,8 @@ import type { CalendarOverride } from "../domain/calendar.js";
 import { addDays, daysBetween, isIsoDate, jstDate, sha256Hex, uuid } from "../domain/race.js";
 import { authenticateAgent, authenticateUser, CSRF_HEADER, newToken, type AuthConfig, type Principal } from "./auth.js";
 import { handleMcp } from "./mcp.js";
-import { CreateAgentRequest, CreateOverrideRequest, IngestEnvelopeRequest, RevokeAgentRequest, RunAnalysisRequest, SetModeRequest } from "./schemas.js";
+import { CreateAgentRequest, CreateOverrideRequest, IngestEnvelopeRequest, RetentionRequest, RevokeAgentRequest, RunAnalysisRequest, SetModeRequest } from "./schemas.js";
+import { runRetention } from "../application/retention.js";
 
 export interface AppContext {
   readonly services: Services;
@@ -220,6 +221,14 @@ export async function handleRequest(req: Request, ctx: AppContext): Promise<Resp
         await s.access.setMode(TENANT_ID, b.mode, p.id, b.reason, now);
         await s.access.audit(TENANT_ID, { actorType: "USER", actor: p.id, action: "MODE_SET", targetType: "ops_mode", targetId: null, after: { mode: b.mode }, reason: b.reason }, now);
         return json({ mode: b.mode });
+      }
+      case "POST /api/v1/admin/retention": {
+        const b = await body(req, RetentionRequest);
+        const now = s.clock.now();
+        const days = Object.fromEntries(Object.entries(b.days ?? {}).filter((e): e is [string, number] => typeof e[1] === "number"));
+        const r = await runRetention(s.db, TENANT_ID, now, b.execute, days);
+        if (b.execute) await s.access.audit(TENANT_ID, { actorType: "USER", actor: p.id, action: "RETENTION_EXECUTE", targetType: "retention", targetId: null, after: r.lines, reason: null }, now.toISOString());
+        return json(r);
       }
       case "GET /api/v1/admin/db-stats":
         return json(await s.access.tableCounts(TENANT_ID));

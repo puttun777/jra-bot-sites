@@ -58,3 +58,11 @@ export const IngestEnvelopeRequest = z
   .strict();
 
 export type IngestEnvelopeRequest = z.infer<typeof IngestEnvelopeRequest>;
+
+const retentionDays = z.number().int().min(7).max(3650);
+export const RetentionRequest = z
+  .object({
+    execute: z.boolean(),
+    days: z.object({ COMBO_ODDS: retentionDays.optional(), INGEST_RAW: retentionDays.optional(), SCHEDULE_EVENTS: retentionDays.optional(), BOT_RUNS: retentionDays.optional() }).strict().optional(),
+  })
+  .strict();
