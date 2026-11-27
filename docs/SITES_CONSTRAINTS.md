@@ -60,7 +60,7 @@
 |---|---|---|---|
 | **E-1** | 身元ヘッダの名前と偽装防止 | ログイン後に `/api/v1/me` が本人のメールを返す。**未ログイン・別ブラウザから `oai-authenticated-user-email: owner@…` を付けて送っても 401/403** | 偽装を防げない場合は公開しない。Sites の公式の認証 API に置き換える（`src/api/auth.ts` の `authenticateUser` だけ） |
 | **E-2** | D1 で `migrations/0001〜0003` が適用できる | 全テーブル作成・`PRAGMA foreign_keys` 相当が有効・CHECK が効く | 失敗した構文だけを置き換える（DATABASE §2 の変換表） |
-| **E-3** | 外部 fetch の可否 | Worker から `https://discord.com/api/webhooks/...` へ POST できるか（テスト用 Webhook） | 不可なら Discord 通知は ChatGPT Automations の通知・サイト内表示で代替（既定のまま） |
+| **E-3** | 外部 fetch の可否（と Shift_JIS の解読） | 管理 API / MCP の `fetch_jra`（what="card"）が成功する（JRA 公式への POST と `TextDecoder("shift_jis")`）。Discord はテスト用 Webhook へ POST | 不可なら本人の PC の CLI（`fetch-jra` → `push`）か、ChatGPT の Web 検索（OPERATIONS §4）。Discord はサイト内表示で代替 |
 | **E-4** | MCP の登録 | `/mcp` に ChatGPT から `tools/list` が届く。認証方式（ベアラー / Sites の方式） | 不可なら CSV/JSON の手動取込（画面）で運用 |
 | **E-5** | Automations からサイトを呼べるか | 定期タスクから `get_fetch_plan` → `upsert_*` → `run_analysis` が通る | 手動実行（画面のボタン・ChatGPT からの依頼） |
 | **E-6** | 実行時間の上限 | 1 日 36 レースの `run_analysis` が 1 リクエストで終わる | `raceId` ごとに分割して呼ぶ（API は対応済み） |

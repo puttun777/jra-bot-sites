@@ -8,15 +8,24 @@
  *   backup <out.sqlite>             DB ファイルの複製（VACUUM INTO）
  *   restore <in.sqlite>             DB ファイルを置き換える（現在の DB は .bak に退避）
  *   export <out.json> [--from --to] JSON エクスポート
+ *   legacy-export <old.sqlite> <out.json> [--from YYYY-MM-DD --to YYYY-MM-DD]
+ *                                   旧 jra-bot の SQLite → 取込の封筒（JSON）。**実データなので Git に入れない**（data/ 配下を推奨）
+ *   legacy-import <old.sqlite> [--from --to]   旧 SQLite をローカル DB へ取込（封筒を作って ingestBatch に通す）
+ *   backtest --from YYYY-MM-DD --to YYYY-MM-DD   過去日を発走前のオッズだけで再判定し、紙上成績を出す（DB のコピーで実行を推奨）
+ *   fetch-jra --date YYYY-MM-DD --what card|results [--venue 05]   JRA 公式サイトから取得してローカル DB へ取込（2 秒間隔）
+ *   push <envelopes.json> --url https://<site>  封筒をサイトの /api/v1/ingest/batches へ送る（トークンは環境変数 INGEST_TOKEN）
  */
 import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { createServices, ingestBatch, runAnalysis } from "../application/services.js";
+import { createServices, ingestBatch, performanceReport, runAnalysis } from "../application/services.js";
 import { IngestEnvelopeRequest } from "../api/schemas.js";
 import { addDays, jstDate, jstToInstant, systemClock, uuid } from "../domain/race.js";
 import { NodeSqliteDatabase } from "../infrastructure/db/nodeSqlite.js";
 import { migrate } from "./migrate.js";
 import { csvToRecords } from "../integrations/csvImport.js";
+import { convertLegacy } from "./legacy.js";
+import { fetchJraAndIngest } from "../application/jraFetch.js";
+import { JraClient } from "../integrations/jra/client.js";
 
 const dbPath = process.env["LOCAL_DB_PATH"] ?? "data/local.sqlite";
 const [cmd, ...rest] = process.argv.slice(2);
@@ -138,8 +147,84 @@ async function main(): Promise<void> {
       console.log(`export: ${out}`);
       return;
     }
+    case "legacy-export": {
+      const [src, out] = rest;
+      if (src === undefined || out === undefined || existsSync(out)) throw new Error("legacy-export <old.sqlite> <out.json>（出力先は新しいファイル）");
+      const r = convertLegacy(src, { ...(opt("--from") === undefined ? {} : { from: opt("--from") }), ...(opt("--to") === undefined ? {} : { to: opt("--to") }) });
+      mkdirSync(dirname(out), { recursive: true });
+      writeFileSync(out, JSON.stringify(r.envelopes));
+      console.log(JSON.stringify(r.report, null, 2));
+      return;
+    }
+    case "legacy-import": {
+      const src = rest[0];
+      if (src === undefined) throw new Error("legacy-import <old.sqlite>");
+      const r = convertLegacy(src, { ...(opt("--from") === undefined ? {} : { from: opt("--from") }), ...(opt("--to") === undefined ? {} : { to: opt("--to") }) });
+      const s = createServices(open(), systemClock);
+      await ensureCliAgent(s);
+      const total = { applied: 0, unchanged: 0, duplicates: 0, deferred: 0, rejected: 0, quarantined: 0, replayed: 0, duplicateBatches: 0 };
+      for (const env of r.envelopes) {
+        const x = await ingestBatch(s, "local-cli", { batchId: env.batchId, source: env.source, observedAt: env.observedAt, records: env.records.map((rec) => ({ id: rec.id, payload: JSON.stringify(rec.data) })) });
+        if (x.status === "DUPLICATE_BATCH") total.duplicateBatches++;
+        total.applied += x.applied;
+        total.unchanged += x.unchanged;
+        total.duplicates += x.duplicates;
+        total.deferred += x.deferred;
+        total.rejected += x.rejected;
+        total.quarantined += x.quarantined;
+        total.replayed += x.replayed;
+      }
+      console.log(JSON.stringify({ conversion: r.report, ingest: total }, null, 2));
+      return;
+    }
+    case "backtest": {
+      const from = opt("--from");
+      const to = opt("--to");
+      if (from === undefined || to === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) throw new Error("backtest --from YYYY-MM-DD --to YYYY-MM-DD");
+      const s = createServices(open(), systemClock);
+      const days: { date: string; analyzed: number; noOdds: number; signals: number }[] = [];
+      for (let d = from; d <= to; d = addDays(d, 1)) {
+        const r = await runAnalysis(s, { date: d, trigger: "BACKFILL", actor: "local-cli:backtest" });
+        if (r.races.length === 0) continue;
+        days.push({ date: d, analyzed: r.races.filter((x) => x.status === "ANALYZED").length, noOdds: r.races.filter((x) => x.status === "NO_ODDS").length, signals: r.races.reduce((a, x) => a + x.signals, 0) });
+      }
+      const perf = await performanceReport(s, from, to);
+      console.log(JSON.stringify({ days, performance: perf }, null, 2));
+      console.log("注意: 紙上成績（購入していない仮想の損益）。将来の成績を保証しない。");
+      return;
+    }
+    case "fetch-jra": {
+      const date = opt("--date");
+      const what = opt("--what");
+      const venue = opt("--venue");
+      if (date === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(date) || (what !== "card" && what !== "results")) throw new Error("fetch-jra --date YYYY-MM-DD --what card|results [--venue 05]");
+      const s = createServices(open(), systemClock);
+      const r = await fetchJraAndIngest(s, new JraClient(), what, date, venue);
+      console.log(JSON.stringify(r, null, 2));
+      return;
+    }
+    case "push": {
+      const file = rest[0];
+      const url = opt("--url");
+      const token = process.env["INGEST_TOKEN"];
+      if (file === undefined || url === undefined || !/^https:\/\/[^/]+/.test(url)) throw new Error("push <envelopes.json> --url https://<site>");
+      if (token === undefined || token.length < 32) throw new Error("環境変数 INGEST_TOKEN（32 文字以上）を設定してください");
+      const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+      const envs = (Array.isArray(raw) ? raw : [raw]).map((e) => IngestEnvelopeRequest.parse(e));
+      let ok = 0;
+      let dup = 0;
+      for (const env of envs) {
+        const res = await fetch(new URL("/api/v1/ingest/batches", url), { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(env) });
+        if (!res.ok) throw new Error(`送信に失敗: HTTP ${res.status}（${ok} 件送信済み。再実行すると送信済みは重複として数えるだけ）`);
+        const body = (await res.json()) as { status?: unknown };
+        if (body.status === "DUPLICATE_BATCH") dup++;
+        else ok++;
+      }
+      console.log(`push: ${ok} 件を送信、${dup} 件は送信済み`);
+      return;
+    }
     default:
-      console.log("usage: node dist/src/local/cli.js <migrate|seed-demo|import|import-csv|analyze|backup|restore|export>");
+      console.log("usage: node dist/src/local/cli.js <migrate|seed-demo|import|import-csv|analyze|backtest|backup|restore|export|legacy-export|legacy-import|fetch-jra|push>");
   }
 }
 

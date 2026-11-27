@@ -4,7 +4,7 @@
 
 ---
 
-GitHub リポジトリ `puttun777/jra-bot-sites`（ブランチ `<マージ後なら main。未マージなら claude/jra-bot-sites-migration-2pk888>`）のコードで、**非公開の ChatGPT Site** を作ってください。
+GitHub リポジトリ `puttun777/jra-bot-sites`（ブランチ `main`）のコードで、**非公開の ChatGPT Site** を作ってください。
 最初に `docs/HANDOFF.md` だけを読んでください（既存リポジトリ jra-bot / jra-bot-web / jra-bot-infra の再調査は不要です。コードの再実装もしないでください）。
 
 制約:
@@ -18,7 +18,7 @@ GitHub リポジトリ `puttun777/jra-bot-sites`（ブランチ `<マージ後�
 3. **設定**: `OWNER_EMAILS=<本人のメール>`、`VIEWER_EMAILS=<もう 1 名のメール。無ければ空>`、`INGEST_TOKEN=<32 文字以上のランダム値>` をサイトの設定（シークレット）に入れる。
 4. **認証の検証（最重要）**: 対象者を本人（と指定の 1 名）に限定して公開前の版で確認する。ログイン後 `/api/v1/me` が本人と ADMIN を返すこと、**未ログインのクライアントが `oai-authenticated-user-email` ヘッダを偽装しても 401/403 になること**（HANDOFF §8）。偽装が通る場合は公開せず報告する。
 5. **画面**: `/` で「概要・シグナル・成績・運用」のタブが表示されること。運用タブの「選択した日付の判定を実行」が結果を表示すること（データが無ければ「対象のレースがありません」）。
-6. **MCP**: `POST /mcp`（ベアラー: INGEST_TOKEN）をこのサイトのプラグイン（MCP サーバ）として登録し、`tools/list` が 13 個、`get_sync_status` が応答することを確認する（HANDOFF §9）。Plus で登録できない場合は報告する（手動取込で運用する）。
+6. **MCP**: `POST /mcp`（ベアラー: INGEST_TOKEN）をこのサイトのプラグイン（MCP サーバ）として登録し、`tools/list` が 14 個、`get_sync_status` が応答することを確認する（HANDOFF §9）。Plus で登録できない場合は報告する（手動取込で運用する）。
 7. **外部通信と実行時間の確認**（任意）: `docs/SITES_CONSTRAINTS.md` §3 の E-3・E-6 を確認し、結果を報告する。
 8. **公開**: 非公開（対象者限定）のまま公開する。
 9. **Automations**: `docs/OPERATIONS.md` §4 の依頼文 A〜D を、§1 のタイミングで登録する。最初の 1 回は手動で実行して、取得できなかった値を登録していないこと・`observedAt` が取得時刻であることを確認する。

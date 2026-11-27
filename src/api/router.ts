@@ -23,7 +23,10 @@ import type { CalendarOverride } from "../domain/calendar.js";
 import { addDays, daysBetween, isIsoDate, jstDate, sha256Hex, uuid } from "../domain/race.js";
 import { authenticateAgent, authenticateUser, CSRF_HEADER, newToken, type AuthConfig, type Principal } from "./auth.js";
 import { handleMcp } from "./mcp.js";
-import { CreateAgentRequest, CreateOverrideRequest, IngestEnvelopeRequest, RevokeAgentRequest, RunAnalysisRequest, SetModeRequest } from "./schemas.js";
+import { CreateAgentRequest, CreateOverrideRequest, FetchJraRequest, IngestEnvelopeRequest, RetentionRequest, RevokeAgentRequest, RunAnalysisRequest, SetModeRequest } from "./schemas.js";
+import { runRetention } from "../application/retention.js";
+import { fetchJraAndIngest } from "../application/jraFetch.js";
+import { JraClient } from "../integrations/jra/client.js";
 
 export interface AppContext {
   readonly services: Services;
@@ -204,7 +207,7 @@ export async function handleRequest(req: Request, ctx: AppContext): Promise<Resp
       }
       case "POST /api/v1/admin/analysis/run": {
         const b = await body(req, RunAnalysisRequest);
-        const r = await runAnalysis(s, { ...b, trigger: "MANUAL", actor: p.id });
+        const r = await runAnalysis(s, { ...(b.date === undefined ? {} : { date: b.date }), ...(b.raceId === undefined ? {} : { raceId: b.raceId }), trigger: b.backfill === true ? "BACKFILL" : "MANUAL", actor: p.id });
         return json(r, r.state === "ALREADY_RUNNING" ? 409 : 200);
       }
       case "POST /api/v1/admin/ingest": {
@@ -220,6 +223,24 @@ export async function handleRequest(req: Request, ctx: AppContext): Promise<Resp
         await s.access.setMode(TENANT_ID, b.mode, p.id, b.reason, now);
         await s.access.audit(TENANT_ID, { actorType: "USER", actor: p.id, action: "MODE_SET", targetType: "ops_mode", targetId: null, after: { mode: b.mode }, reason: b.reason }, now);
         return json({ mode: b.mode });
+      }
+      case "POST /api/v1/admin/retention": {
+        const b = await body(req, RetentionRequest);
+        const now = s.clock.now();
+        const days = Object.fromEntries(Object.entries(b.days ?? {}).filter((e): e is [string, number] => typeof e[1] === "number"));
+        const r = await runRetention(s.db, TENANT_ID, now, b.execute, days);
+        if (b.execute) await s.access.audit(TENANT_ID, { actorType: "USER", actor: p.id, action: "RETENTION_EXECUTE", targetType: "retention", targetId: null, after: r.lines, reason: null }, now.toISOString());
+        return json(r);
+      }
+      case "POST /api/v1/admin/fetch/jra": {
+        // JRA 公式サイトから取得（Sites から外部へ通信できる場合だけ動く: SITES_CONSTRAINTS E-3）
+        const b = await body(req, FetchJraRequest);
+        try {
+          return json(await fetchJraAndIngest(s, new JraClient(), b.what, b.date, b.venue));
+        } catch (e) {
+          if (e instanceof TypeError || (e instanceof Error && e.message.startsWith("JRA:"))) throw new HttpError(502, "upstream_unavailable");
+          throw e;
+        }
       }
       case "GET /api/v1/admin/db-stats":
         return json(await s.access.tableCounts(TENANT_ID));
