@@ -20,6 +20,7 @@ import {
 } from "../../src/domain/analysis/betStrategy.js";
 import { evaluateOdds, LEGACY_DECISION_DEFAULTS, type DecisionConfig, type DecisionSignal } from "../../src/domain/analysis/decision.js";
 import { deduplicateTickets, parseRetryAfterSeconds, splitContent } from "../../src/domain/notify.js";
+import { extractFeatures, hashBucket, hashSign, predictWin, predictWinBatch, type WinModelDocument } from "../../src/domain/ml/winModel.js";
 import { arr, loadFixture, num, obj, optBool, optNum, optStr, runFixture, toJson, type GoldenCall, type Json } from "./harness.js";
 
 function snapshots(v: Json | undefined): { odds: number; popularity: number }[] {
@@ -80,6 +81,18 @@ function comboOpts(k: { [key: string]: Json }, base: DecisionConfig | null) {
 function signalJson(s: DecisionSignal): Json {
   const { kind: _kind, ...rest } = s;
   return toJson(rest);
+}
+
+function model(v: Json | undefined): WinModelDocument {
+  const m = obj(v);
+  const w = m["weights"];
+  return {
+    weights: w === null || w === undefined ? null : arr(w).map(Number),
+    bias: optNum(m, "bias") ?? 0,
+    calibA: optNum(m, "calib_a") ?? null,
+    calibB: optNum(m, "calib_b") ?? null,
+    marketBlendAlpha: optNum(m, "market_blend_alpha") ?? 1.0,
+  };
 }
 
 const run = (call: GoldenCall): Json => {
@@ -211,6 +224,16 @@ const run = (call: GoldenCall): Json => {
     }
     case "dedupe_tickets":
       return toJson(deduplicateTickets(arr(a["tickets"]).map((t) => obj(t) as { kumi?: string; ev?: number })));
+    case "model_predict":
+      return predictWin(model(a["model"]), num(a, "odds"), num(a, "popularity"));
+    case "model_extract_features":
+      return [extractFeatures(num(a, "odds"), num(a, "popularity"))];
+    case "model_predict_batch":
+      return predictWinBatch(model(a["model"]), arr(a["odds_list"]).map(Number), arr(a["popularity_list"]).map(Number));
+    case "hash_bucket":
+      return hashBucket(String(a["s"]), num(a, "dim"));
+    case "hash_sign":
+      return hashSign(String(a["s"]));
     case "signature_defaults":
       throw new Error("unsupported");
     default:
@@ -218,7 +241,7 @@ const run = (call: GoldenCall): Json => {
   }
 };
 
-/** 対応するフィクスチャ（GD11 = 旧の決済、G1/G2 = ML は未対応。docs/TEST_REPORT.md に件数を記録）。 */
+/** 対応するフィクスチャ（GD11 = 旧の決済、G3〜G7 = DB の特徴量を使う ML は未対応。docs/TEST_REPORT.md に件数を記録）。 */
 const CASES = [
   "GD01-EV-001",
   "GD01-KELLY-002",
@@ -241,6 +264,8 @@ const CASES = [
   "G8-SPLIT-001",
   "G8-DEDUP-003",
   "G8-RETRY-002",
+  "G1-MODEL-001",
+  "G2-HASH-001",
 ] as const;
 
 describe("golden: 旧 Python と同じ結果（分析・判定・通知補助）", () => {

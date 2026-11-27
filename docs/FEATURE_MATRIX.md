@@ -33,7 +33,7 @@
 | 22 | 取得エージェント管理（F20 web R20） | B | `agent` 表・AgentAdminApi → 「取込クライアント」（MCP・取込のトークン） | Windows エージェントは無いが、機械の書き手の管理として同じ表・画面を使う | API |
 | 23 | 認証（IAP/OIDC・Cognito）・認可（VIEWER/ADMIN）・CSRF | D + C | web `ApiAuthFilter.kt` → `src/api/auth.ts` | 身元は Sites が注入するヘッダ（未検証 E-1）。役割は app_user 表 / 環境変数 | API |
 | 24 | Discord 通知（F13） | **E**（保留）/ C（補助） | `discord.py` の分割・429 待機・重複除去 → `src/domain/notify.ts` | 外部通信の可否が未確認（E-3）。通知はサイト内表示（signals）で代替。整形・分割は移植済み | G8 の 3 件 |
-| 25 | ML 推論（F10）・学習（F11・F12） | **E**（保留） | web `ml/*`・`ml-train` | 学習に使える実データが無い（JV-Link を使わない）。推論は `modelProbabilities` の差込口だけ用意。学習済み・検証済みとして扱わない | G1〜G7 は未対応 |
+| 25 | ML 推論（F10）・学習（F11・F12） | C（一部）/ **E** | 旧 `ml/model.py`・`features.py` → `src/domain/ml/winModel.ts`・`md5.ts` | 旧 WinProbabilityModel の推論（オッズ・人気の特徴・Platt・市場ブレンド）とハッシュ特徴を移植。判定への組み込み・学習・DB の特徴量（G3〜G7）は保留。学習済み・検証済みとして扱わない | G1・G2 一致 |
 | 26 | バックテスト（BacktestRunner.kt） | D | `runAnalysis`（trigger BACKFILL）・CLI `backtest` | 過去日を発走前のオッズだけで再判定して紙上成績を出す（web の BacktestRunner とは別実装） | 統合（旧データの再判定） |
 | 27 | データ保持（retention）・バックアップ | C + D | web `Retention.kt` → `src/application/retention.ts`（管理 API。既定はドライラン）、バックアップは CLI（VACUUM INTO・JSON）・期間エクスポート API | D1 のバックアップ機能は未確認 | 統合 |
 | 28 | Terraform / Pulumi / EC2 / Cloud Run / Docker 本番 / IAM / WIF | **E**（廃止） | — | AWS/GCP/Azure を使わない | — |
