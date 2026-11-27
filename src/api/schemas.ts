@@ -66,3 +66,5 @@ export const RetentionRequest = z
     days: z.object({ COMBO_ODDS: retentionDays.optional(), INGEST_RAW: retentionDays.optional(), SCHEDULE_EVENTS: retentionDays.optional(), BOT_RUNS: retentionDays.optional() }).strict().optional(),
   })
   .strict();
+
+export const FetchJraRequest = z.object({ what: z.enum(["card", "results"]), date: isoDate, venue: z.string().regex(/^(0[1-9]|10)$/).optional() }).strict();

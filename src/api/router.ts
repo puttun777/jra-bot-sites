@@ -23,8 +23,10 @@ import type { CalendarOverride } from "../domain/calendar.js";
 import { addDays, daysBetween, isIsoDate, jstDate, sha256Hex, uuid } from "../domain/race.js";
 import { authenticateAgent, authenticateUser, CSRF_HEADER, newToken, type AuthConfig, type Principal } from "./auth.js";
 import { handleMcp } from "./mcp.js";
-import { CreateAgentRequest, CreateOverrideRequest, IngestEnvelopeRequest, RetentionRequest, RevokeAgentRequest, RunAnalysisRequest, SetModeRequest } from "./schemas.js";
+import { CreateAgentRequest, CreateOverrideRequest, FetchJraRequest, IngestEnvelopeRequest, RetentionRequest, RevokeAgentRequest, RunAnalysisRequest, SetModeRequest } from "./schemas.js";
 import { runRetention } from "../application/retention.js";
+import { fetchJraAndIngest } from "../application/jraFetch.js";
+import { JraClient } from "../integrations/jra/client.js";
 
 export interface AppContext {
   readonly services: Services;
@@ -229,6 +231,16 @@ export async function handleRequest(req: Request, ctx: AppContext): Promise<Resp
         const r = await runRetention(s.db, TENANT_ID, now, b.execute, days);
         if (b.execute) await s.access.audit(TENANT_ID, { actorType: "USER", actor: p.id, action: "RETENTION_EXECUTE", targetType: "retention", targetId: null, after: r.lines, reason: null }, now.toISOString());
         return json(r);
+      }
+      case "POST /api/v1/admin/fetch/jra": {
+        // JRA 公式サイトから取得（Sites から外部へ通信できる場合だけ動く: SITES_CONSTRAINTS E-3）
+        const b = await body(req, FetchJraRequest);
+        try {
+          return json(await fetchJraAndIngest(s, new JraClient(), b.what, b.date, b.venue));
+        } catch (e) {
+          if (e instanceof TypeError || (e instanceof Error && e.message.startsWith("JRA:"))) throw new HttpError(502, "upstream_unavailable");
+          throw e;
+        }
       }
       case "GET /api/v1/admin/db-stats":
         return json(await s.access.tableCounts(TENANT_ID));

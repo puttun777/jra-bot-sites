@@ -11,6 +11,8 @@ import { performanceReport, replayAllPending, runAnalysis, syncStatus, TENANT_ID
 import { addDays, jstDate, uuid } from "../domain/race.js";
 import type { Principal } from "./auth.js";
 import { raceDetail, ingestEnvelope } from "./router.js";
+import { fetchJraAndIngest } from "../application/jraFetch.js";
+import { JraClient } from "../integrations/jra/client.js";
 import { instantSchema, isoDate, raceIdSchema } from "./schemas.js";
 
 const PROTOCOL_VERSION = "2025-06-18";
@@ -72,6 +74,10 @@ const TOOLS = {
         provisional: z.boolean().default(false),
       })
       .strict(),
+  },
+  fetch_jra: {
+    description: "JRA 公式サイトから直接取得して登録する（card = 開催日・出馬表、results = 着順・払戻）。サイトから外部へ通信できない環境では失敗する。オッズは未対応（upsert_odds を使う）。",
+    input: z.object({ what: z.enum(["card", "results"]), date: isoDate, venue: z.string().regex(/^(0[1-9]|10)$/).optional() }).strict(),
   },
   run_analysis: { description: "判定（EV・買い目）を実行する。date か raceId。同じオッズで判定済みなら何もしない。", input: z.object({ date: isoDate.optional(), raceId: raceIdSchema.optional() }).strict() },
   get_analysis_results: { description: "指定日のシグナル（推奨）の要約。", input: z.object({ date: isoDate.optional(), limit: z.number().int().min(1).max(100).default(30) }).strict() },
@@ -204,6 +210,11 @@ export async function callTool(s: Services, principal: Principal, name: ToolName
       }
       if (recs.length === 0) throw new z.ZodError([{ code: "custom", path: ["finishes"], message: "finishes か payouts が必要", input: undefined }]);
       return { ...(await ingestEnvelope(s, principal.id, envelope(a.observedAt, a.source, recs))) };
+    }
+    case "fetch_jra": {
+      const a = TOOLS.fetch_jra.input.parse(rawArgs);
+      const r = await fetchJraAndIngest(s, new JraClient(), a.what, a.date, a.venue);
+      return { ...r, ingest: r.ingest === null ? null : { status: r.ingest.status, applied: r.ingest.applied, unchanged: r.ingest.unchanged, deferred: r.ingest.deferred, quarantined: r.ingest.quarantined } };
     }
     case "run_analysis": {
       const a = TOOLS.run_analysis.input.parse(rawArgs);
