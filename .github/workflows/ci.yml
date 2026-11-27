@@ -1,0 +1,35 @@
+# 最低限の CI（型検査・Lint・試験・ビルド）。GitHub Actions の利用枠を節約する:
+# - 1 ジョブ・マトリクスなし・依存のキャッシュ・同じブランチの古い実行は取り消す
+# - 文書だけの変更では実行しない（paths-ignore）・定期実行はしない
+# - Sites への自動デプロイはしない（公式に確認できるまで: docs/SITES_CONSTRAINTS.md）
+# action の版は jra-bot-web（puttun777/jra-bot-web@7bcf1c4 .github）で固定済みの SHA を再利用する。
+name: ci
+on:
+  pull_request:
+    paths-ignore: ["docs/**", "**/*.md"]
+  push:
+    branches: [main]
+    paths-ignore: ["docs/**", "**/*.md"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    name: ci gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.23.5"
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test

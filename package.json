@@ -1,0 +1,38 @@
+{
+  "name": "jra-bot-sites",
+  "version": "0.1.0",
+  "private": true,
+  "description": "jra-bot の後継（ChatGPT Sites 向け・TypeScript）",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "build": "npm run clean && tsc -p tsconfig.json && node scripts/build-assets.mjs",
+    "test": "npm run build && node --test --test-reporter=spec \"dist/tests/**/*.test.js\"",
+    "test:unit": "node --test \"dist/tests/unit/**/*.test.js\" \"dist/tests/golden/**/*.test.js\"",
+    "test:integration": "node --test \"dist/tests/integration/**/*.test.js\"",
+    "db:migrate": "node dist/src/local/cli.js migrate",
+    "db:seed-demo": "node dist/src/local/cli.js seed-demo",
+    "db:backup": "node dist/src/local/cli.js backup",
+    "db:restore": "node dist/src/local/cli.js restore",
+    "dev": "npm run build && node dist/src/local/server.js",
+    "start": "node dist/src/local/server.js",
+    "check": "npm run typecheck && npm run lint && npm test"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.7",
+    "esbuild": "0.28.2",
+    "eslint": "10.15.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.74.0"
+  }
+}

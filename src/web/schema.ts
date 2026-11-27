@@ -1,0 +1,196 @@
+/**
+ * ダッシュボードの API（/api/v1。dashboard の ReadApi・AdminApi・MeController の DTO）の応答の型と検査。
+ * サーバの DTO と項目名・型を揃える。見本（src/test/resources/frontend-contract/*.json）を、TypeScript の試験はこの検査に通し、
+ * Kotlin の統合試験は実際の応答と形（キーと JSON の型）を比べる。サーバ側の変更で食い違ったら、どちらかの試験が失敗する。
+ */
+import { array, boolean, type Infer, instant, integer, localDate, nullable, number, object, record, string } from "./validate.js";
+
+export const Run = object({
+  runId: string,
+  date: localDate,
+  trigger: string,
+  state: string,
+  startedAt: instant,
+  finishedAt: nullable(instant),
+  exitReason: nullable(string),
+});
+export type Run = Infer<typeof Run>;
+
+export const Day = object({ venueCode: string, status: string, lastConfirmedAt: nullable(instant) });
+export type Day = Infer<typeof Day>;
+
+export const Status = object({
+  serverTime: instant,
+  today: localDate,
+  mode: string,
+  days: array(Day),
+  lastRun: nullable(Run),
+  nextRaceAt: nullable(instant),
+  scheduleStale: boolean,
+  latestConfirmedAt: nullable(instant),
+});
+export type Status = Infer<typeof Status>;
+
+export const Race = object({
+  raceId: string,
+  venueCode: string,
+  raceNo: integer,
+  name: nullable(string),
+  postAt: nullable(instant),
+  status: string,
+});
+export type Race = Infer<typeof Race>;
+export const Races = array(Race);
+
+export const Signal = object({
+  signalId: nullable(integer),
+  raceId: string,
+  market: string,
+  umaban: integer,
+  observedAt: instant,
+  odds: number,
+  prob: number,
+  ev: number,
+  stake: number,
+  probSource: nullable(string),
+  state: string,
+});
+export type Signal = Infer<typeof Signal>;
+
+export const SignalPage = object({ items: array(Signal), page: integer, size: integer, total: integer });
+export type SignalPage = Infer<typeof SignalPage>;
+
+export const ComboSummary = object({
+  market: string,
+  count: integer,
+  hits: integer,
+  totalStake: number,
+  actualPayout: number,
+  hitRate: nullable(number),
+  actualRoi: nullable(number),
+});
+export type ComboSummary = Infer<typeof ComboSummary>;
+
+export const Performance = object({
+  from: localDate,
+  to: localDate,
+  winCount: integer,
+  winHits: integer,
+  winTotalStake: number,
+  winPaperPayout: number,
+  winActualPayout: nullable(number),
+  winHitRate: nullable(number),
+  winActualRoi: nullable(number),
+  combos: array(ComboSummary),
+  winUnsettled: integer,
+  comboUnsettled: integer,
+  racesWithoutPostTime: integer,
+  unreadableNotices: integer,
+});
+export type Performance = Infer<typeof Performance>;
+
+export const Runs = array(Run);
+
+export const Override = object({
+  id: nullable(integer),
+  scope: string,
+  date: localDate,
+  raceId: nullable(string),
+  action: string,
+  value: nullable(string),
+  reason: string,
+  createdBy: string,
+  createdAt: instant,
+  validUntil: nullable(instant),
+  revokedAt: nullable(instant),
+  revokedBy: nullable(string),
+});
+export type Override = Infer<typeof Override>;
+export const Overrides = array(Override);
+
+export const Me = object({ email: string, role: string, tenantId: integer });
+export type Me = Infer<typeof Me>;
+
+/** ML モデルの一覧（R22。D-268。表示だけ）。 */
+export const MlModel = object({
+  modelId: string,
+  kind: string,
+  status: string,
+  schemaVersion: integer,
+  featureSchemaHash: string,
+  trainedFrom: nullable(localDate),
+  trainedTo: nullable(localDate),
+  nTrain: nullable(integer),
+  createdAt: instant,
+  activatedAt: nullable(instant),
+  activatedBy: nullable(string),
+  previousModelId: nullable(string),
+  metrics: record(number),
+  gatePurpose: nullable(string),
+  gateReasons: array(string),
+  metricsReadable: boolean,
+});
+export type MlModel = Infer<typeof MlModel>;
+export const MlModels = array(MlModel);
+
+/** Windows 取得エージェント（R20。D-270）。資格情報は含まない。 */
+export const Agent = object({
+  agentId: string,
+  name: string,
+  tokenExpiresAt: instant,
+  status: string,
+  createdAt: instant,
+  createdBy: nullable(string),
+  revokedAt: nullable(instant),
+  revokedBy: nullable(string),
+});
+export type Agent = Infer<typeof Agent>;
+export const Agents = array(Agent);
+
+// ---- Sites 版で追加した API（docs/MIGRATION.md §5。jra-bot-web には無い）----
+
+/** データ取得状況（GET /api/v1/sync-status）。 */
+export const SyncRace = object({
+  raceId: string,
+  status: string,
+  postAt: nullable(instant),
+  latestWinOddsAt: nullable(instant),
+  hasResult: boolean,
+  hasPayout: boolean,
+});
+export const SyncStatus = object({
+  serverTime: instant,
+  today: localDate,
+  mode: string,
+  dayVerdict: string,
+  pendingRecords: integer,
+  failedRecords: integer,
+  lastBatchAt: nullable(instant),
+  races: array(SyncRace),
+});
+export type SyncStatus = Infer<typeof SyncStatus>;
+
+/** レース詳細（GET /api/v1/race-detail?raceId=）。 */
+export const RaceEntry = object({ umaban: integer, odds: number, popularity: nullable(integer), finish: nullable(integer) });
+export const PayoutRow = object({ comboKey: string, payout: number, provisional: boolean });
+export const RaceDetail = object({
+  raceId: string,
+  name: nullable(string),
+  status: string,
+  postAt: nullable(instant),
+  oddsObservedAt: nullable(instant),
+  entries: array(RaceEntry),
+  payouts: array(object({ market: string, rows: array(PayoutRow) })),
+  signals: array(object({ market: string, umaban: integer, observedAt: instant, odds: number, prob: number, ev: number, stake: number, reason: nullable(string) })),
+});
+export type RaceDetail = Infer<typeof RaceDetail>;
+
+/** 手動実行の結果（POST /api/v1/admin/analysis/run）。 */
+export const AnalysisSummary = object({
+  runId: nullable(string),
+  date: localDate,
+  state: string,
+  message: string,
+  races: array(object({ raceId: string, status: string, signals: integer, bestEv: nullable(number), note: nullable(string) })),
+});
+export type AnalysisSummary = Infer<typeof AnalysisSummary>;
