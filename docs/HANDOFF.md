@@ -29,13 +29,11 @@ npm start                                         # http://127.0.0.1:8787/（疑
 ```
 
 ## 5. Sites への載せ方（未検証。ChatGPT 側の作業）
-Sites が受け付ける構成を先に最小構成で確認する（SITES_CONSTRAINTS E-7）。
-- **案 1（生の Worker が使える場合）**: 入口 = `dist/sites/worker.js`（`export default { fetch(request, env) }`）。静的ファイル = `dist/public/`（ASSETS バインディング）。D1 = `env.DB`。
-- **案 2（Vinext 等の推奨構成が必須の場合）**: 推奨構成の雛形を作り、すべてのパス（`/api/*`・`/mcp`・`/healthz`）を 1 つのルートで受けて `handleRequest(request, ctx)`（`src/api/router.ts`）に渡す。`ctx` の作り方は `src/sites/worker.ts` をそのまま使う。画面は `dist/public/` を `public/` に置く。**業務コードは変更しない**。
-- `.openai/hosting.json` を作る: `{"d1": "DB", "r2": null}`（`project_id` は Sites が付ける。秘密は書かない）。
+**案 1（Worker ESM）**を採用。`npm run build:sites` で `dist/server/index.js` を生成する。Worker に組み込んだ既存 HTML/CSS/JS を配信し、`/api/*`・`/mcp` を既存ルーターにつなぐ。D1 は `env.DB` を使う。
+- `.openai/hosting.json` に `d1: "DB"`、`r2: null`、`capabilities: ["mcp"]` を宣言する。`project_id` は Sites 側のソースで設定する。
 
 ## 6. DB の構築・マイグレーション
-- D1 に `migrations/0001_baseline.sql` → `0002_ops_calendar_ingest_ml.sql` → `0003_sites.sql` の順で適用（Sites のマイグレーションの仕組みに合わせて同梱。スターターでは `dist/.openai/drizzle/` に置く方式）。
+- `npm run build:sites` が `migrations/0001_baseline.sql` → `0002_ops_calendar_ingest_ml.sql` → `0003_sites.sql` の順に `dist/.openai/drizzle/` に同梱する。D1 の 50 バイト制限に合わせて、長い `GLOB` だけを成果物で同等の短い述語に分割する。公開済みの成果物を変更する場合は新しい番号のマイグレーションを追加する。
 - 失敗した構文があれば DATABASE §2 の変換表の該当箇所だけを直し、新しい番号のファイルで追加する（適用済みのファイルは書き換えない）。
 - 確認: `GET /healthz` → `{"ok":true}`、ログイン後 `GET /api/v1/status` が 200。
 
@@ -45,7 +43,6 @@ Sites が受け付ける構成を先に最小構成で確認する（SITES_CONST
 | `OWNER_EMAILS` | 必須 | 管理者（本人）のメール。カンマ区切り |
 | `VIEWER_EMAILS` | 任意 | 閲覧者（もう 1 名）のメール |
 | `INGEST_TOKEN` | 任意 | MCP・取込用のベアラートークン（32 文字以上のランダム値）。画面の「取込クライアントを追加」で発行したトークンでもよい |
-| `AUTH_EMAIL_HEADER` | 任意 | 身元ヘッダ名が `oai-authenticated-user-email` と違う場合だけ |
 | `DISCORD_WEBHOOK_URL` | 不要 | 未使用（外部通信の確認後に実装） |
 
 ## 8. 認証の設定（最重要の検証: E-1）
@@ -55,7 +52,7 @@ Sites が受け付ける構成を先に最小構成で確認する（SITES_CONST
 
 ## 9. MCP の登録（E-4）
 - サーバ: `POST https://<site>/mcp`（JSON-RPC 2.0。`initialize`・`tools/list`・`tools/call`。SSE・セッションは使わない）
-- 認証: `Authorization: Bearer <INGEST_TOKEN または発行したトークン>`。Sites のプラグイン方式で別の認証が必要なら、`src/api/router.ts` の `/mcp` の認証部分だけを差し替える。
+- 認証: Sites のプラグイン接続では Sites が渡す利用者の身元を受け、ADMIN の呼び出しを Worker 内で `INGEST_TOKEN` に接続する。外部の取込クライアントは、Sites のサービスアクセスに加えて `Authorization: Bearer <INGEST_TOKEN または発行したトークン>` を送る。
 - ツール: get_sync_status / get_fetch_plan / list_races / get_race / upsert_race_days / upsert_races / upsert_odds / upsert_results / fetch_jra / run_analysis / get_analysis_results / get_performance / list_failed_records / retry_pending
 - 確認: `tools/list` が 14 個、`get_sync_status` が応答する。
 
