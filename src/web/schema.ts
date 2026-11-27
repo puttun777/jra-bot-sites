@@ -146,3 +146,51 @@ export const Agent = object({
 });
 export type Agent = Infer<typeof Agent>;
 export const Agents = array(Agent);
+
+// ---- Sites 版で追加した API（docs/MIGRATION.md §5。jra-bot-web には無い）----
+
+/** データ取得状況（GET /api/v1/sync-status）。 */
+export const SyncRace = object({
+  raceId: string,
+  status: string,
+  postAt: nullable(instant),
+  latestWinOddsAt: nullable(instant),
+  hasResult: boolean,
+  hasPayout: boolean,
+});
+export const SyncStatus = object({
+  serverTime: instant,
+  today: localDate,
+  mode: string,
+  dayVerdict: string,
+  pendingRecords: integer,
+  failedRecords: integer,
+  lastBatchAt: nullable(instant),
+  races: array(SyncRace),
+});
+export type SyncStatus = Infer<typeof SyncStatus>;
+
+/** レース詳細（GET /api/v1/race-detail?raceId=）。 */
+export const RaceEntry = object({ umaban: integer, odds: number, popularity: nullable(integer), finish: nullable(integer) });
+export const PayoutRow = object({ comboKey: string, payout: number, provisional: boolean });
+export const RaceDetail = object({
+  raceId: string,
+  name: nullable(string),
+  status: string,
+  postAt: nullable(instant),
+  oddsObservedAt: nullable(instant),
+  entries: array(RaceEntry),
+  payouts: array(object({ market: string, rows: array(PayoutRow) })),
+  signals: array(object({ market: string, umaban: integer, observedAt: instant, odds: number, prob: number, ev: number, stake: number, reason: nullable(string) })),
+});
+export type RaceDetail = Infer<typeof RaceDetail>;
+
+/** 手動実行の結果（POST /api/v1/admin/analysis/run）。 */
+export const AnalysisSummary = object({
+  runId: nullable(string),
+  date: localDate,
+  state: string,
+  message: string,
+  races: array(object({ raceId: string, status: string, signals: integer, bestEv: nullable(number), note: nullable(string) })),
+});
+export type AnalysisSummary = Infer<typeof AnalysisSummary>;

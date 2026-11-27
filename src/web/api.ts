@@ -65,6 +65,23 @@ export async function post(path: string, body: unknown, fetchFn: FetchFn = brows
   await res.body?.cancel().catch(() => undefined);
 }
 
+/** 管理操作（POST）で、応答の本文を使うもの（Sites 版で追加: 手動実行・取込の結果の表示）。 */
+export async function postJson<T>(path: string, body: unknown, decoder: Decoder<T>, fetchFn: FetchFn = browserFetch): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetchFn(path, {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", Accept: "application/json", [CSRF_HEADER.name]: CSRF_HEADER.value },
+      body: JSON.stringify(body ?? {}),
+    });
+  } catch {
+    throw new ApiError(NETWORK_MESSAGE);
+  }
+  if (!res.ok) throw new ApiError(postFailureMessage(res.status));
+  return decodeBody(res, decoder);
+}
+
 /** 画面に出す文。ApiError 以外（想定外の例外）は詳細を出さない。 */
 export function messageOf(e: unknown): string {
   return e instanceof ApiError ? e.message : "表示に失敗しました（画面を再読み込みしてください）。";

@@ -2,13 +2,24 @@
  * JRA Bot ダッシュボードの画面（index.html から `<script type="module" src="/js/app.js">` で読む）。読取り中心で、管理者だけが手動補正を操作できる。
  * 外部ライブラリ・CDN・インライン script なし。値は textContent だけで描画する。応答は schema.ts で検査してから使う。
  */
-import { ApiError, getJson, messageOf, post } from "./api.js";
+import { ApiError, getJson, messageOf, post, postJson } from "./api.js";
 import { byId, el, emptyBox, errorBox, pill, show, table } from "./dom.js";
 import { dateQuery, hasNextPage, pageInfo, performanceQuery, signalsQuery } from "./format.js";
-import { type Agent, Agents, Me, MlModels, type Override, Overrides, Performance, Races, Runs, SignalPage, Status } from "./schema.js";
+import { type Agent, Agents, AnalysisSummary, Me, MlModels, type Override, Overrides, Performance, RaceDetail, Races, Runs, SignalPage, Status, SyncStatus } from "./schema.js";
+import { integer, object, string } from "./validate.js";
 import {
   AGENT_HEADERS,
   agentRows,
+  analysisMessage,
+  DETAIL_SIGNAL_HEADERS,
+  detailSignalRows,
+  ENTRY_HEADERS,
+  ENTRY_NUM_COLS,
+  entryRows,
+  raceDetailNote,
+  SYNC_HEADERS,
+  syncRows,
+  syncSummary,
   ML_HEADERS,
   ML_NUM_COLS,
   mlModelRows,
@@ -67,6 +78,18 @@ function ui() {
     mlModels: byId("ml-models", HTMLDivElement),
     agents: byId("agents", HTMLDivElement),
     agentMsg: byId("agent-msg", HTMLSpanElement),
+    raceDetail: byId("race-detail", HTMLDivElement),
+    sync: byId("sync", HTMLDivElement),
+    syncSummary: byId("sync-summary", HTMLParagraphElement),
+    runAnalysis: byId("run-analysis", HTMLButtonElement),
+    replay: byId("replay", HTMLButtonElement),
+    modeNormal: byId("mode-normal", HTMLButtonElement),
+    modeStop: byId("mode-stop", HTMLButtonElement),
+    runMsg: byId("run-msg", HTMLSpanElement),
+    importJson: byId("import-json", HTMLTextAreaElement),
+    importBtn: byId("import-btn", HTMLButtonElement),
+    importMsg: byId("import-msg", HTMLSpanElement),
+    agentCreate: byId("agent-create", HTMLButtonElement),
   };
 }
 type Ui = ReturnType<typeof ui>;
@@ -87,9 +110,41 @@ function start(u: Ui): void {
   async function loadRaces(): Promise<void> {
     try {
       const rows = await getJson(`/api/v1/races${dateQuery(u.date.value)}`, Races);
-      show(u.races, rows.length ? table(RACE_HEADERS, raceRows(rows)) : emptyBox("この日のレース予定はありません。"));
+      const cells = raceRows(rows).map((r, i) => {
+        const race = rows[i];
+        if (race === undefined) return r;
+        const b = el("button", "詳細");
+        b.type = "button";
+        b.addEventListener("click", () => void loadRaceDetail(race.raceId));
+        return [...r, b];
+      });
+      show(u.races, rows.length ? table([...RACE_HEADERS, ""], cells) : emptyBox("この日のレース予定はありません（予定が未取得の可能性があります）。"));
     } catch (e) {
       show(u.races, errorBox(messageOf(e)));
+    }
+  }
+
+  async function loadRaceDetail(raceId: string): Promise<void> {
+    show(u.raceDetail, emptyBox("読み込み中…"));
+    try {
+      const d = await getJson(`/api/v1/race-detail?raceId=${encodeURIComponent(raceId)}`, RaceDetail);
+      const wrap = el("div");
+      wrap.appendChild(el("p", raceDetailNote(d), "note"));
+      wrap.appendChild(d.entries.length ? table(ENTRY_HEADERS, entryRows(d), ENTRY_NUM_COLS) : emptyBox("オッズ・出走の情報が未取得です。"));
+      if (d.signals.length) wrap.appendChild(table(DETAIL_SIGNAL_HEADERS, detailSignalRows(d), [2, 3, 4, 5, 6]));
+      show(u.raceDetail, wrap);
+    } catch (e) {
+      show(u.raceDetail, errorBox(messageOf(e)));
+    }
+  }
+
+  async function loadSync(): Promise<void> {
+    try {
+      const st = await getJson("/api/v1/sync-status", SyncStatus);
+      u.syncSummary.textContent = syncSummary(st);
+      show(u.sync, st.races.length ? table(SYNC_HEADERS, syncRows(st)) : emptyBox("本日のレース予定は未取得です。"));
+    } catch (e) {
+      show(u.sync, errorBox(messageOf(e)));
     }
   }
 
@@ -242,6 +297,76 @@ function start(u: Ui): void {
         u.msg.textContent = messageOf(e);
       }
     });
+    u.runAnalysis.addEventListener("click", async () => {
+      u.runMsg.textContent = "実行中…";
+      u.runAnalysis.disabled = true;
+      try {
+        const r = await postJson("/api/v1/admin/analysis/run", u.date.value ? { date: u.date.value } : {}, AnalysisSummary);
+        u.runMsg.textContent = analysisMessage(r);
+        void loadRuns();
+        void loadSync();
+      } catch (e) {
+        u.runMsg.textContent = messageOf(e);
+      } finally {
+        u.runAnalysis.disabled = false;
+      }
+    });
+    u.replay.addEventListener("click", async () => {
+      u.runMsg.textContent = "再適用中…";
+      try {
+        const r = await postJson("/api/v1/admin/ingest/replay", {}, object({ attempted: integer, resolved: integer, stillPending: integer }));
+        u.runMsg.textContent = `保留 ${r.attempted} 件を再適用し、${r.resolved} 件を解消しました（残り ${r.stillPending} 件）。`;
+        void loadSync();
+      } catch (e) {
+        u.runMsg.textContent = messageOf(e);
+      }
+    });
+    for (const [b, mode] of [
+      [u.modeNormal, "NORMAL"],
+      [u.modeStop, "STOPPED"],
+    ] as const) {
+      b.addEventListener("click", async () => {
+        const reason = prompt(`運用モードを ${mode} にします。理由（必須）:`);
+        if (reason === null || reason.trim() === "") return;
+        try {
+          await post("/api/v1/admin/mode", { mode, reason: reason.trim() });
+          u.runMsg.textContent = `運用モードを ${mode} にしました。`;
+          void loadStatus();
+        } catch (e) {
+          u.runMsg.textContent = messageOf(e);
+        }
+      });
+    }
+    u.importBtn.addEventListener("click", async () => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(u.importJson.value);
+      } catch {
+        u.importMsg.textContent = "JSON として読めません。";
+        return;
+      }
+      try {
+        const r = await postJson("/api/v1/admin/ingest", parsed, object({ status: string, records: integer, applied: integer, deferred: integer, quarantined: integer }));
+        u.importMsg.textContent = `${r.status}: ${r.records} 件中 反映 ${r.applied}・保留 ${r.deferred}・隔離 ${r.quarantined}`;
+        void loadSync();
+      } catch (e) {
+        u.importMsg.textContent = messageOf(e);
+      }
+    });
+    u.agentCreate.addEventListener("click", async () => {
+      const agentId = prompt("取込クライアントの ID（英数字・_・-、64 文字まで）:");
+      if (agentId === null || !/^[A-Za-z0-9_-]{1,64}$/.test(agentId)) return;
+      const name = prompt("名前（例: ChatGPT MCP）:");
+      if (name === null || name.trim() === "") return;
+      try {
+        const r = await postJson("/api/v1/admin/agents", { agentId, name: name.trim(), validDays: 90 }, object({ agentId: string, token: string }));
+        // トークンはこの 1 回だけ表示する（再表示はできない）
+        prompt("トークン（この画面を閉じると再表示できません。Sites のシークレット等に保存してください）:", r.token);
+        void loadAgents();
+      } catch (e) {
+        u.agentMsg.textContent = messageOf(e);
+      }
+    });
     void loadOverrides();
     void loadMlModels();
     void loadAgents();
@@ -252,6 +377,7 @@ function start(u: Ui): void {
     signals: () => void loadSignals(),
     performance: () => void loadPerformance(),
     ops: () => {
+      void loadSync();
       void loadRuns();
       if (!u.admin.hidden) {
         void loadOverrides();

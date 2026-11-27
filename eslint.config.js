@@ -21,7 +21,26 @@ export default tseslint.config(
       "@typescript-eslint/consistent-type-imports": "error",
       "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
       "@typescript-eslint/no-unnecessary-condition": "off",
-      "no-console": "off"
+      "no-console": "off",
+      "@typescript-eslint/no-floating-promises": ["error", { allowForKnownSafeCalls: [{ from: "package", name: ["test", "describe", "it"], package: "node:test" }] }],
+    },
+  },
+  {
+    // jra-bot-web からコピーした画面（元は biome で検査）。イベントハンドラの async は元の書き方を保つ
+    files: ["src/web/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: { arguments: false } }],
+      "@typescript-eslint/no-confusing-void-expression": "off",
+    },
+  },
+  {
+    files: ["tests/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-confusing-void-expression": "off",
+      "@typescript-eslint/no-unsafe-type-assertion": "off",
+      "@typescript-eslint/require-await": "off",
+      "@typescript-eslint/no-base-to-string": "off",
+      "@typescript-eslint/no-unused-vars": ["error", { varsIgnorePattern: "^_", destructuredArrayIgnorePattern: "^_" }],
     },
   },
   {

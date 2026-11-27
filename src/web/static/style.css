@@ -10,7 +10,7 @@ h1{font-size:20px;margin:0}h2{font-size:17px;margin:16px 0 8px}
 .ok{color:var(--ok)}.warn{color:var(--warn)}.ng{color:var(--ng)}.muted{color:var(--muted)}
 nav{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 nav .spacer{flex:1}
-button,input{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 12px;min-height:40px}
+button,input,select,textarea{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 12px;min-height:40px}
 button[aria-selected=true]{border-color:var(--accent);color:var(--accent);font-weight:600}
 .table-wrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:14px}
@@ -21,3 +21,5 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .error{color:var(--ng)}
 .pager{display:flex;gap:12px;align-items:center;margin-top:8px}
 @media (max-width:640px){body{font-size:15px}th,td{padding:5px 6px}}
+textarea{width:100%;font-family:ui-monospace,monospace;font-size:13px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}

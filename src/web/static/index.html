@@ -25,6 +25,8 @@
   <section id="overview" class="tab">
     <h2>本日のレース</h2>
     <div id="races" class="table-wrap"></div>
+    <h2>レース詳細</h2>
+    <div id="race-detail" class="table-wrap"><div class="empty">レース一覧の「詳細」を押すと表示します。</div></div>
   </section>
   <section id="signals" class="tab" hidden>
     <h2>シグナル</h2>
@@ -38,9 +40,23 @@
     <div id="perf" class="table-wrap"></div>
   </section>
   <section id="ops" class="tab" hidden>
-    <h2>運用</h2>
+    <h2>データ取得状況</h2>
+    <p id="sync-summary" class="note"></p>
+    <div id="sync" class="table-wrap"></div>
+    <h2>実行履歴</h2>
     <div id="runs" class="table-wrap"></div>
     <div id="admin" hidden>
+      <h2>手動実行（管理者のみ・即時に実行します）</h2>
+      <div class="actions">
+        <button type="button" id="run-analysis">選択した日付の判定を実行</button>
+        <button type="button" id="replay">取込の保留を再適用</button>
+        <button type="button" id="mode-normal">運用モード: 通常</button>
+        <button type="button" id="mode-stop">運用モード: 停止</button>
+      </div>
+      <span id="run-msg" class="note" role="status"></span>
+      <h2>データ取込（JSON の封筒を貼り付け。形式は docs/DATA_SOURCES.md）</h2>
+      <textarea id="import-json" rows="6" spellcheck="false" placeholder='{"batchId":"…","source":"manual","observedAt":"2026-11-28T05:00:00Z","records":[…]}'></textarea>
+      <div class="actions"><button type="button" id="import-btn">取り込む</button><span id="import-msg" class="note" role="status"></span></div>
       <h2>手動補正（管理者のみ・監査記録に残ります）</h2>
       <div id="overrides" class="table-wrap"></div>
       <form id="override-form" autocomplete="off">
@@ -58,7 +74,8 @@
       </form>
       <h2>ML モデル（表示のみ。有効化は本人の判断で、この画面からは行わない。有効なモデルを先頭に最新 100 件）</h2>
       <div id="ml-models" class="table-wrap"></div>
-      <h2>取得エージェント（失効は元に戻せない。理由は監査記録に残る）</h2>
+      <h2>取込クライアント（MCP・自動取込のトークン。失効は元に戻せない。理由は監査記録に残る）</h2>
+      <div class="actions"><button type="button" id="agent-create">取込クライアントを追加</button></div>
       <div id="agents" class="table-wrap"></div>
       <span id="agent-msg" class="note" role="status"></span>
     </div>

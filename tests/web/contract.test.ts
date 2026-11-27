@@ -100,6 +100,8 @@ describe("contract: 静的な画面", () => {
       HTMLSpanElement: "span",
       HTMLFormElement: "form",
       HTMLSelectElement: "select",
+      HTMLTextAreaElement: "textarea",
+      HTMLParagraphElement: "p",
     };
     const refs = [...app.matchAll(/byId\("([^"]+)", (HTML\w+Element)\)/g)];
     assert.ok(refs.length >= 20);

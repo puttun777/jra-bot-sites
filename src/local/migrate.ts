@@ -26,7 +26,7 @@ export function migrate(db: NodeSqliteDatabase, dir: string): string[] {
       db.execScript("COMMIT");
     } catch (e) {
       db.execScript("ROLLBACK");
-      throw new Error(`migration ${f} failed: ${e instanceof Error ? e.message : String(e)}`);
+      throw new Error(`migration ${f} failed: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
     }
     done.push(f);
   }

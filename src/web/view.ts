@@ -15,7 +15,7 @@ import {
   SIGNAL,
   type Tone,
 } from "./format.js";
-import type { Agent, MlModel, Override, Performance, Race, Run, Signal, Status } from "./schema.js";
+import type { Agent, AnalysisSummary, MlModel, Override, Performance, Race, RaceDetail, Run, Signal, Status, SyncStatus } from "./schema.js";
 
 export interface Pill {
   readonly text: string;
@@ -182,5 +182,58 @@ export function revokeReason(input: string | null): string | null {
   if (input === null) return null;
   const r = input.trim();
   // biome-ignore lint/suspicious/noControlCharactersInRegex: 制御文字を拒否するための範囲
+  // eslint-disable-next-line no-control-regex
   return r.length >= 1 && r.length <= 500 && !/[\u0000-\u001f\u007f-\u009f]/.test(r) ? r : null;
 }
+
+// ---- Sites 版で追加した表示（DOM に依存しない）----
+
+const VERDICT: Readonly<Record<string, string>> = {
+  CONFIRMED: "開催確定",
+  NO_RACE_CONFIRMED: "開催なし（確認済み）",
+  UNKNOWN: "予定未取得",
+  STALE: "予定が古い",
+  UNCONFIRMED: "未確認",
+  CANCELLED: "中止",
+  POSTPONED: "延期",
+};
+
+export const SYNC_HEADERS = ["レース", "発走", "状態", "最新オッズ取得", "着順", "払戻"] as const;
+export function syncRows(s: SyncStatus): string[][] {
+  return s.races.map((r) => [r.raceId, fmtTime(r.postAt), label(RACE, r.status), r.latestWinOddsAt ? fmtDateTime(r.latestWinOddsAt) : "未取得", r.hasResult ? "取得済み" : "未取得", r.hasPayout ? "取得済み" : "未取得"]);
+}
+export function syncSummary(s: SyncStatus): string {
+  return `本日の判定: ${label(VERDICT, s.dayVerdict)} / 保留 ${s.pendingRecords} 件・失敗 ${s.failedRecords} 件 / 最終取込 ${fmtDateTime(s.lastBatchAt)}（取得日時は Asia/Tokyo）`;
+}
+
+export const ENTRY_HEADERS = ["馬番", "単勝オッズ", "人気", "着順"] as const;
+export const ENTRY_NUM_COLS = [0, 1, 2, 3] as const;
+export function entryRows(d: RaceDetail): string[][] {
+  return d.entries.map((e) => [String(e.umaban), num(e.odds, 1), e.popularity === null ? DASH : String(e.popularity), e.finish === null ? DASH : String(e.finish)]);
+}
+export function raceDetailNote(d: RaceDetail): string {
+  const odds = d.oddsObservedAt ? `オッズ取得 ${fmtDateTime(d.oddsObservedAt)}（発走前の最新）` : "発走前のオッズは未取得（分析不能）";
+  const pays = d.payouts
+    .filter((p) => p.rows.length > 0)
+    .map((p) => `${p.market === "win" ? "単勝" : p.market === "wide" ? "ワイド" : "三連複"} ${p.rows.map((r) => `${r.comboKey}=${num(r.payout)}円${r.provisional ? "（速報）" : ""}`).join(" ")}`);
+  return `${d.raceId} ${d.name ?? ""} / ${label(RACE, d.status)} / 発走 ${fmtTime(d.postAt)} / ${odds}${pays.length ? ` / 払戻: ${pays.join(" / ")}` : " / 払戻: 未取得"}`;
+}
+export function detailSignalRows(d: RaceDetail): string[][] {
+  return d.signals.map((s) => [fmtTime(s.observedAt), s.market, String(s.umaban), num(s.odds, 1), pct(s.prob), num(s.ev, 2), num(s.stake, 1), s.reason ?? DASH]);
+}
+export const DETAIL_SIGNAL_HEADERS = ["観測", "賭式", "軸", "オッズ", "確率", "EV", "推奨額", "根拠"] as const;
+
+export function analysisMessage(a: AnalysisSummary): string {
+  const counts = new Map<string, number>();
+  for (const r of a.races) counts.set(r.status, (counts.get(r.status) ?? 0) + 1);
+  const parts = [...counts].map(([k, v]) => `${label(ANALYSIS_STATUS, k)} ${v}`);
+  return `${a.message}${parts.length ? `（${parts.join("、")}）` : ""}`;
+}
+const ANALYSIS_STATUS: Readonly<Record<string, string>> = {
+  ANALYZED: "判定済み",
+  NO_ODDS: "オッズ未取得",
+  PAST_POST: "発走後",
+  NOT_IN_WINDOW: "対象外",
+  ALREADY_EVALUATED: "変化なし",
+  ERROR: "失敗",
+};

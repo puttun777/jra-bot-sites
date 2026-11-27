@@ -709,8 +709,11 @@ export interface EffectiveDay {
   readonly staleVenues: readonly string[];
 }
 
-/** 予定が古いとみなすまでの時間（ReadApi.STALE_AFTER_MINUTES と同じ 120 分）。 */
-export const STALE_AFTER_MS = 120 * 60_000;
+/**
+ * 予定が古いとみなすまでの時間。jra-bot-web は 120 分（取得エージェントが常時スケジュールを取り直す前提）。
+ * Sites 版は予定の取得が 1 日 1〜2 回（ChatGPT の定期実行・手動）なので 18 時間にする（D-S07。docs/MIGRATION.md §6）。
+ */
+export const STALE_AFTER_MS = 18 * 60 * 60_000;
 
 function isFresh(confirmedAt: string | null, now: Date, staleAfterMs: number): boolean {
   if (confirmedAt === null) return false;
