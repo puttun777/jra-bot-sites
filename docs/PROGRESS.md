@@ -23,7 +23,11 @@
 
 ## 試験結果（2026-11-27）
 `npm run typecheck` 0 エラー / `npm run lint` 0 エラー / `npm run build` 成功 / `npm test` 109 件成功（失敗 0・skip 0）。
-検証したツリー: ブランチの最新コミット（PR の CI を正とする）。Sites 上の検証は未実施。
+検証したツリー: `75d9fd6`（ローカル）。Sites 上の検証は未実施。
+
+**GitHub Actions（PR #1 https://github.com/puttun777/jra-bot-sites/pull/1）**: run 45954913397 は `failure`。ただしジョブは 2 秒で終了し、
+ステップ・ログが無い（ログ取得は 404）。リポジトリは Private で、ランナーでジョブが開始されていない（Actions の利用枠・支払い上限の可能性）と判断した。
+**コードの失敗ではない**が、CI の成功は確認できていない。本人が Actions の利用状況（Settings → Billing）を確認し、再実行（Re-run jobs）して結果を見る必要がある。
 
 ## 判断
 MIGRATION.md §2（D-S01〜D-S13）。
