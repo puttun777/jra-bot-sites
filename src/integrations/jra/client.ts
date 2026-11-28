@@ -30,7 +30,7 @@ export class JraClient {
 
   /** /JRADB/{page} に CNAME を POST して、Shift_JIS を文字列にして返す。 */
   async page(page: string, cname: string): Promise<string> {
-    if (!/^access[A-Z0-9]{1,2}\.html$/.test(page) || !/^[a-z0-9]{6,60}\/[0-9A-F]{2}$/.test(cname)) throw new Error("不正なページ指定");
+    if (!/^access[A-Z0-9]{1,2}\.html$/.test(page) || !/^[A-Za-z0-9]{6,60}\/[0-9A-F]{2}$/.test(cname)) throw new Error("不正なページ指定");
     if (this.count >= MAX_REQUESTS) throw new Error("1 回の実行のリクエスト上限に達した");
     const wait = this.last + MIN_INTERVAL_MS - this.now();
     if (wait > 0) await this.sleep(wait);

@@ -12,7 +12,7 @@
  *                                   旧 jra-bot の SQLite → 取込の封筒（JSON）。**実データなので Git に入れない**（data/ 配下を推奨）
  *   legacy-import <old.sqlite> [--from --to]   旧 SQLite をローカル DB へ取込（封筒を作って ingestBatch に通す）
  *   backtest --from YYYY-MM-DD --to YYYY-MM-DD   過去日を発走前のオッズだけで再判定し、紙上成績を出す（DB のコピーで実行を推奨）
- *   fetch-jra --date YYYY-MM-DD --what card|results [--venue 05]   JRA 公式サイトから取得してローカル DB へ取込（2 秒間隔）
+ *   fetch-jra --date YYYY-MM-DD --what card|results|odds [--venue 05] [--within 60]   JRA 公式サイトから取得してローカル DB へ取込（2 秒間隔）
  *   push <envelopes.json> --url https://<site>  封筒をサイトの /api/v1/ingest/batches へ送る（トークンは環境変数 INGEST_TOKEN）
  */
 import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync, mkdirSync } from "node:fs";
@@ -197,9 +197,10 @@ async function main(): Promise<void> {
       const date = opt("--date");
       const what = opt("--what");
       const venue = opt("--venue");
-      if (date === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(date) || (what !== "card" && what !== "results")) throw new Error("fetch-jra --date YYYY-MM-DD --what card|results [--venue 05]");
+      const within = opt("--within");
+      if (date === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(date) || (what !== "card" && what !== "results" && what !== "odds")) throw new Error("fetch-jra --date YYYY-MM-DD --what card|results|odds [--venue 05] [--within 60]");
       const s = createServices(open(), systemClock);
-      const r = await fetchJraAndIngest(s, new JraClient(), what, date, venue);
+      const r = await fetchJraAndIngest(s, new JraClient(), what, date, { ...(venue === undefined ? {} : { venue }), ...(within === undefined ? {} : { withinMinutes: Number(within) }) });
       console.log(JSON.stringify(r, null, 2));
       return;
     }

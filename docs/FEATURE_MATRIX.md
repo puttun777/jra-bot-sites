@@ -19,7 +19,7 @@
 | 8 | 取込: 正規化 JSON パーサ（NYS/NRA/NTC/NOW/NOD/NOS/NRS/NHR） | B | web `ingest/agent/NormalizedJsonRecordParser.kt` → `src/domain/ingest.ts` | web では合成検証専用（本番無効）だったものを、**Sites 版の唯一の取込形式として有効化** | 単体・統合 |
 | 9 | 取込: 観測の適用・取込境界の検査・保留→再適用・隔離・冪等（ObservationApplier / BatchIngestor / PendingReplayer） | C | → `ingest.ts`・`services.ts` | 規則は同じ。ワイド・三連複の保存は既定で有効（判定に実オッズが要る: D-S06） | 統合 |
 | 10 | JV-Link 取得・固定長パーサ・Windows エージェント（F01・F02・F21・F22・F23） | **E**（廃止） | — | JV-Link・JRA-VAN を使わない（依頼の必須制約） | — |
-| 11 | 公開 Web からの自動取得（JRA 公式） | D | 新規 `src/integrations/jra/`・`src/application/jraFetch.ts` | 本人の承認（U-1）。開催日・出馬表・着順・払戻を実装。**オッズは未対応**（ページ構造を未確認） | 単体（自作 HTML）・実ページで取得を確認 |
+| 11 | 公開 Web からの自動取得（JRA 公式） | D | 新規 `src/integrations/jra/`・`src/application/jraFetch.ts` | 本人の承認（U-1）。開催日・出馬表・着順・払戻・オッズ（単勝・ワイド・3 連複。発走前だけ）を実装 | 単体（自作 HTML）・実ページで取得を確認 |
 | 12 | ChatGPT からの取込（MCP ツール） | D | 新規 `src/api/mcp.ts` | 取得は ChatGPT（Automations / 手動）が行い、サイトは検査して保存 | API・MCP 試験。Sites 未検証 E-4 |
 | 13 | CSV/JSON の手動取込 | D | 新規 `src/integrations/csvImport.ts`・画面の JSON 取込・CLI | 第 3 優先の取得方式 | 単体・API |
 | 14 | 判定の実行（bot-run・RaceEvaluator）・実行履歴・リース・重複実行防止・停止モード（F14） | C | web `domain/botrun/*`・infra `ops/src/state.ts`（モード）→ `services.ts runAnalysis` | 常駐ループを廃し、1 リクエストの有限ジョブ（日付・レース単位で分割可能） | 統合 |
