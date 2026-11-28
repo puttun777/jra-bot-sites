@@ -26,6 +26,7 @@ import {
   type DecisionSignal,
 } from "../domain/analysis/decision.js";
 import type { OddsEntry } from "../domain/analysis/betStrategy.js";
+import { withPopularity } from "../domain/analysis/popularity.js";
 import { IngestRetryableError, ObservationApplier, parseNormalizedRecord, REASON_RACE_NOT_FOUND, type ApplyOutcome } from "../domain/ingest.js";
 import { displayedTickets } from "../domain/notify.js";
 import { comboKeyOf, settleCombo, settleWin, summarizeCombos, summarizeWin, type SettledCombo, type SettledSignal } from "../domain/performance.js";
@@ -343,7 +344,9 @@ async function analyzeRace(s: Services, runId: string, raceId: string, postAt: s
       s.market.latestCombos(TENANT_ID, raceId, "sanrenpuku", cutoff),
       s.market.recentWinSnapshots(TENANT_ID, raceId, cutoff, 4),
     ]);
-    const odds: OddsEntry[] = win.entries.map((e) => ({ umaban: e.umaban, odds: e.odds, popularity: e.popularity ?? 0 }));
+    // 人気がすべて欠けていれば（JRA 公式のオッズのページ）単勝オッズの順位で補う（D-S18）。急落・人気急上昇の比較も同じ規則の順位で行う
+    const pop = withPopularity(win.entries);
+    const odds: OddsEntry[] = pop.entries;
     const minutesToPost = postAt === null ? null : (Date.parse(postAt) - Date.parse(win.observedAt)) / 60_000;
     const cfg: DecisionConfig = config.priorityMode === "hit_rate" ? { ...config, hitRateMinEv: resolveHitRateMinEv(RECOMMENDED_HIT_RATE_SCHEDULE, config.hitRateMinEv ?? config.evThreshold, minutesToPost) } : config;
     const wideMap = new Map<string, readonly [number, number]>((wide?.rows ?? []).map((r) => [r.comboKey.split("-").map(Number).join("-"), [r.odds, r.oddsHigh ?? r.odds] as const]));

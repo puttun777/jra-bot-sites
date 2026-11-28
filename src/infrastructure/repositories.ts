@@ -21,6 +21,7 @@ import type {
 import type { ComboOddsRow, OddsEntryObs, UpsertOutcome } from "../domain/ingest.js";
 import type { ResultEntry, StoredPayout } from "../domain/performance.js";
 import { parseRaceId, type Market, type RaceId } from "../domain/race.js";
+import { withPopularity } from "../domain/analysis/popularity.js";
 import { int, optInt, optReal, optStr, real, str, type SqlDatabase, type SqlStatement, type SqlValue } from "./db/sql.js";
 
 type Row = Record<string, unknown>;
@@ -382,10 +383,9 @@ export class MarketDataRepo {
     const out = new Map<number, { odds: number; popularity: number }[]>();
     for (const t of times.results) {
       const rows = await this.db.prepare("SELECT umaban, odds, popularity FROM odds_snapshots WHERE tenant_id = ? AND race_id = ? AND market = 'win' AND observed_at = ?").bind(tenantId, raceId, str(t, "observed_at")).all<Row>();
-      for (const r of rows.results) {
-        const u = int(r, "umaban");
-        out.set(u, [...(out.get(u) ?? []), { odds: real(r, "odds"), popularity: optInt(r, "popularity") ?? 0 }]);
-      }
+      // 人気が欠けている時点は単勝オッズの順位で補う（判定と同じ規則: D-S18）
+      const snap = withPopularity(rows.results.map((r) => ({ umaban: int(r, "umaban"), odds: real(r, "odds"), popularity: optInt(r, "popularity") })));
+      for (const e of snap.entries) out.set(e.umaban, [...(out.get(e.umaban) ?? []), { odds: e.odds, popularity: e.popularity }]);
     }
     return out;
   }

@@ -46,9 +46,13 @@ HANDOFF §12（U-1 公開 Web 取得の可否 / U-2 Plus の上限と課金 / U-
 環境: 開発用に許可ホストへ www.jra.go.jp・jra.jp を追加（本人の環境「jra-botリプレース」。承認済み）。
 試験: `npm test` 119 件成功、typecheck・lint 0 エラー。
 
+## 2026-11-28 追加分（PR #3）
+JRA 公式のオッズ（単勝・ワイド・3 連複）の取得（発走前のレースだけ・時点 = ページの「◯時◯分現在オッズ」・3 連複は上位 6 頭の 2 頭以上を含む組）、
+人気の補完（D-S18）。実ページで取得 → 判定まで確認。`npm test` 125 件成功。
+
 ## 次の作業
 1. ChatGPT 側: docs/CHATGPT_DEPLOY_PROMPT.md の手順（最小構成の確認 → D1 → 認証の検証 → MCP → Automations）
-2. Claude Code 側: JRA のオッズのページ（発売中）を確認してオッズの取得を実装、ML 推論の移植（G1・G2）と旧データでの学習、Discord 送信（E-3 が可なら）
+2. Claude Code 側: ML の判定への組み込みと旧データでの学習（G1・G2 の推論は移植済み）、Discord 送信（E-3 が可なら）
 
 ## 再開手順
 `git fetch origin claude/jra-bot-sites-migration-2pk888 && git checkout claude/jra-bot-sites-migration-2pk888 && npm ci --ignore-scripts && npm test`。

@@ -142,3 +142,121 @@ export function parseResult(html: string): JraResult {
   const raceName = nameRaw === undefined ? null : text(nameRaw).slice(0, 100) || null;
   return { postTime, raceName, finishes, payouts: { win: block("win", 1), wide: block("wide", 2), sanrenpuku: block("trio", 3) } };
 }
+
+// ---- オッズ（2026-11-28 に発売中の実ページで確認）----
+//   オッズの開催日    pw15orl00{場2}{年4}{回2}{日2}{日付8}/XX
+//   単勝・複勝        pw151ouS3{場2}{年4}{回2}{日2}{R2}{日付8}Z/XX   table.tanpuku の td.num・td.odds_tan（馬番順。人気の列は無い）
+//   ワイド            pw155ouS3…Z/XX                               table.wide（caption = 馬番 a、行 th = 馬番 b、td.odds の min/max）
+//   3 連複            pw157ouS3…Z99/XX                             table.fuku3（caption = "a-b"、行 th = c、td = オッズ）
+//   オッズの時点      div.cell.time「9時58分現在オッズ」、発走時刻「発走時刻：15時25分」
+
+export interface JraOddsRace extends JraRaceLink {
+  readonly postTime: string | null;
+  readonly winCname: string;
+  readonly wideCname: string | null;
+  readonly trioCname: string | null;
+}
+
+/** オッズのトップにある開催日へのリンク。 */
+export const parseOddsDays = (html: string): JraDayLink[] => dayLinks(html, "pw15orl00");
+
+const ODDS_LINK = (kind: string) => new RegExp(`pw${kind}ouS3(\\d{2})(\\d{4})(\\d{2})(\\d{2})(\\d{2})(\\d{8})Z(?:99)?/[0-9A-F]{2}`);
+
+/** オッズの開催日ページ: レースごとの発走時刻と、単勝・ワイド・3 連複のページ。 */
+export function parseOddsRaces(html: string): JraOddsRace[] {
+  const out: JraOddsRace[] = [];
+  for (const row of html.split(/<tr\b/).slice(1)) {
+    const win = ODDS_LINK("151").exec(row);
+    if (win === null) continue;
+    const [cname, venue = "", , kai = "", nichime = "", r = "", ymd = ""] = win;
+    const raceId = `${ymd}${venue}${r}`;
+    if (!/^(0[1-9]|10)$/.test(venue) || Number(r) < 1 || out.some((x) => x.raceId === raceId)) continue;
+    const t = /<td class="time">\s*(\d{1,2})時(\d{1,2})分\s*<\/td>/.exec(row);
+    const postTime = t?.[1] !== undefined && t[2] !== undefined && Number(t[1]) < 24 && Number(t[2]) < 60 ? `${t[1].padStart(2, "0")}:${t[2].padStart(2, "0")}` : null;
+    out.push({
+      cname,
+      venue,
+      kai: Number(kai),
+      nichime: Number(nichime),
+      raceNo: Number(r),
+      date: isoOf(ymd),
+      raceId,
+      postTime,
+      winCname: cname,
+      wideCname: ODDS_LINK("155").exec(row)?.[0] ?? null,
+      trioCname: ODDS_LINK("157").exec(row)?.[0] ?? null,
+    });
+  }
+  return out.sort((a, b) => (a.raceId < b.raceId ? -1 : 1));
+}
+
+function hhmm(re: RegExp, html: string): string | null {
+  const m = re.exec(html);
+  const h = m?.[1];
+  const mi = m?.[2];
+  return h !== undefined && mi !== undefined && Number(h) < 24 && Number(mi) < 60 ? `${h.padStart(2, "0")}:${mi.padStart(2, "0")}` : null;
+}
+/** オッズの時点（「9時58分現在オッズ」）。 */
+export const parseOddsAsOf = (html: string): string | null => hhmm(/(\d{1,2})時(\d{1,2})分現在オッズ/, html);
+/** オッズのページの発走時刻。 */
+export const parsePostTime = (html: string): string | null => hhmm(/発走時刻：\s*<strong>\s*(\d{1,2})時(\d{1,2})分/, html);
+
+function decimal(s: string): number | null {
+  const t = text(s);
+  if (!/^\d+(\.\d+)?$/.test(t)) return null;
+  const v = Number(t);
+  return v > 0 ? v : null;
+}
+
+/** 単勝オッズ（取消・除外などで数でない馬は含めない）。 */
+export function parseWinOdds(html: string): { umaban: number; odds: number }[] {
+  const table = /<table class="[^"]*\btanpuku\b[^"]*">([\s\S]*?)<\/table>/.exec(html)?.[1] ?? "";
+  const out: { umaban: number; odds: number }[] = [];
+  for (const row of table.split(/<tr\b/).slice(1)) {
+    const num = /<td class="num">\s*(\d{1,2})\s*<\/td>/.exec(row)?.[1];
+    const cell = /<td class="odds_tan">([\s\S]*?)<\/td>/.exec(row)?.[1];
+    if (num === undefined || cell === undefined) continue;
+    const odds = decimal(cell);
+    const u = Number(num);
+    if (odds !== null && u >= 1 && u <= 99 && !out.some((x) => x.umaban === u)) out.push({ umaban: u, odds });
+  }
+  return out;
+}
+
+/** ワイドのオッズ（下限・上限）。 */
+export function parseWideOdds(html: string): { a: number; b: number; low: number; high: number | null }[] {
+  const out: { a: number; b: number; low: number; high: number | null }[] = [];
+  for (const t of html.matchAll(/<table class="[^"]*\bwide\b[^"]*">\s*<caption>\s*(\d{1,2})\s*<\/caption>([\s\S]*?)<\/table>/g)) {
+    const a = Number(t[1]);
+    for (const row of (t[2] ?? "").split(/<tr\b/).slice(1)) {
+      const b = /<th scope="row">\s*(\d{1,2})\s*<\/th>/.exec(row)?.[1];
+      const min = /<span class="min">([^<]*)<\/span>/.exec(row)?.[1];
+      const max = /<span class="max">([^<]*)<\/span>/.exec(row)?.[1];
+      if (b === undefined || min === undefined) continue;
+      const low = decimal(min);
+      const high = max === undefined ? null : decimal(max);
+      if (low !== null && a !== Number(b)) out.push({ a, b: Number(b), low, high: high !== null && high >= low ? high : null });
+    }
+  }
+  return out;
+}
+
+/** 3 連複のオッズ。 */
+export function parseTrioOdds(html: string): { a: number; b: number; c: number; odds: number }[] {
+  const out: { a: number; b: number; c: number; odds: number }[] = [];
+  for (const t of html.matchAll(/<table class="[^"]*\bfuku3\b[^"]*">\s*<caption>\s*(\d{1,2})-(\d{1,2})\s*<\/caption>([\s\S]*?)<\/table>/g)) {
+    const a = Number(t[1]);
+    const b = Number(t[2]);
+    for (const row of (t[3] ?? "").split(/<tr\b/).slice(1)) {
+      const m = /<th scope="row">\s*(\d{1,2})\s*<\/th>\s*<td[^>]*>([\s\S]*?)<\/td>/.exec(row);
+      if (m === null) continue;
+      const odds = decimal(m[2] ?? "");
+      const c = Number(m[1]);
+      if (odds !== null && new Set([a, b, c]).size === 3) out.push({ a, b, c, odds });
+    }
+  }
+  return out;
+}
+
+/** 単勝オッズの順位（domain の規則を再輸出: D-S18）。 */
+export { rankByOdds } from "../../domain/analysis/popularity.js";

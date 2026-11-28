@@ -236,7 +236,7 @@ export async function handleRequest(req: Request, ctx: AppContext): Promise<Resp
         // JRA 公式サイトから取得（Sites から外部へ通信できる場合だけ動く: SITES_CONSTRAINTS E-3）
         const b = await body(req, FetchJraRequest);
         try {
-          return json(await fetchJraAndIngest(s, new JraClient(), b.what, b.date, b.venue));
+          return json(await fetchJraAndIngest(s, new JraClient(), b.what, b.date, { ...(b.venue === undefined ? {} : { venue: b.venue }), ...(b.withinMinutes === undefined ? {} : { withinMinutes: b.withinMinutes }) }));
         } catch (e) {
           if (e instanceof TypeError || (e instanceof Error && e.message.startsWith("JRA:"))) throw new HttpError(502, "upstream_unavailable");
           throw e;

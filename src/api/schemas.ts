@@ -67,4 +67,6 @@ export const RetentionRequest = z
   })
   .strict();
 
-export const FetchJraRequest = z.object({ what: z.enum(["card", "results"]), date: isoDate, venue: z.string().regex(/^(0[1-9]|10)$/).optional() }).strict();
+export const FetchJraRequest = z
+  .object({ what: z.enum(["card", "results", "odds"]), date: isoDate, venue: z.string().regex(/^(0[1-9]|10)$/).optional(), withinMinutes: z.number().int().min(1).max(720).optional() })
+  .strict();
